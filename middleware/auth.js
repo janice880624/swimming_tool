@@ -24,4 +24,10 @@ function requireRole(...roles) {
   };
 }
 
-module.exports = { authenticate, requireRole, JWT_SECRET };
+module.exports = { authenticate, requireRole, JWT_SECRET, ah };
+
+// Wraps an async Express handler so rejected promises are forwarded to next(err)
+// instead of crashing the process (Express 4 doesn't catch async errors natively).
+function ah(fn) {
+  return (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
+}

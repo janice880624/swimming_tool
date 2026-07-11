@@ -1,41 +1,45 @@
 const express = require('express');
-const db = require('../db');
-const { authenticate, requireRole } = require('../middleware/auth');
+const { pool } = require('../db');
+const { authenticate, requireRole, ah } = require('../middleware/auth');
 const { loadOwnedAthlete } = require('./athletes');
 
 // mounted at /api/athletes/:athleteId/tests
 const router = express.Router({ mergeParams: true });
 router.use(authenticate, requireRole('coach'), loadOwnedAthlete);
 
-router.get('/', (req, res) => {
-  const rows = db.prepare('SELECT * FROM test_records WHERE athlete_id = ? ORDER BY date DESC, id DESC')
-    .all(req.athlete.id);
+router.get('/', ah(async (req, res) => {
+  const { rows } = await pool.query(
+    'SELECT * FROM test_records WHERE athlete_id = $1 ORDER BY date DESC, id DESC',
+    [req.athlete.id]
+  );
   res.json({ tests: rows });
-});
+}));
 
-router.post('/', (req, res) => {
+router.post('/', ah(async (req, res) => {
   const b = req.body || {};
   if (!b.date) return res.status(400).json({ error: '日期為必填' });
-  const info = db.prepare(`
+  const { rows } = await pool.query(`
     INSERT INTO test_records
       (athlete_id, date, category, stroke, distance, total_time, splits,
        stroke_rate, stroke_length, breath, vjump, ljump, grip_l, grip_r, flex, note)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+    RETURNING *
+  `, [
     req.athlete.id, b.date, b.category ?? null, b.stroke ?? null, b.distance ?? null,
     b.totalTime ?? null, b.splits ?? null, b.strokeRate ?? null, b.strokeLength ?? null,
     b.breath ?? null, b.vjump ?? null, b.ljump ?? null, b.gripL ?? null, b.gripR ?? null,
     b.flex ?? null, b.note ?? null
-  );
-  const row = db.prepare('SELECT * FROM test_records WHERE id = ?').get(info.lastInsertRowid);
-  res.status(201).json({ test: row });
-});
+  ]);
+  res.status(201).json({ test: rows[0] });
+}));
 
-router.delete('/:testId', (req, res) => {
-  const info = db.prepare('DELETE FROM test_records WHERE id = ? AND athlete_id = ?')
-    .run(Number(req.params.testId), req.athlete.id);
-  if (info.changes === 0) return res.status(404).json({ error: '找不到此紀錄' });
+router.delete('/:testId', ah(async (req, res) => {
+  const { rowCount } = await pool.query(
+    'DELETE FROM test_records WHERE id = $1 AND athlete_id = $2',
+    [Number(req.params.testId), req.athlete.id]
+  );
+  if (rowCount === 0) return res.status(404).json({ error: '找不到此紀錄' });
   res.json({ ok: true });
-});
+}));
 
 module.exports = router;

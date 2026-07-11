@@ -1,0 +1,27 @@
+databases:
+  - name: coach-platform-db
+    plan: free
+    databaseName: coachplatform
+    user: coachplatform
+
+services:
+  - type: web
+    name: coach-platform
+    runtime: node
+    plan: free
+    region: singapore
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: coach-platform-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: SEED_ADMIN_NAME
+        value: 系統管理員
+      - key: SEED_ADMIN_EMAIL
+        value: admin@example.com
+      - key: SEED_ADMIN_PASSWORD
+        generateValue: true
