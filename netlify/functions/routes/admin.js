@@ -6,16 +6,28 @@ const { authenticate, requireRole, ah } = require('../middleware/auth');
 const router = express.Router();
 router.use(authenticate, requireRole('admin'));
 
-// List all coaches, with a count of how many athletes each one manages
+// List all coaches, with counts of athletes/sessions/tests each one owns
 router.get('/coaches', ah(async (req, res) => {
   const { rows } = await pool.query(`
     SELECT u.id, u.name, u.email, u.active, u.created_at,
-           (SELECT COUNT(*) FROM athletes a WHERE a.coach_id = u.id) AS athlete_count
+           (SELECT COUNT(*) FROM athletes a WHERE a.coach_id = u.id) AS athlete_count,
+           (SELECT COUNT(*) FROM resistance_sessions rs
+              JOIN athletes a ON rs.athlete_id = a.id
+              WHERE a.coach_id = u.id) AS session_count,
+           (SELECT COUNT(*) FROM test_records tr
+              JOIN athletes a ON tr.athlete_id = a.id
+              WHERE a.coach_id = u.id) AS test_count
     FROM users u
     WHERE u.role = 'coach'
     ORDER BY u.created_at DESC
   `);
-  res.json({ coaches: rows });
+  const coaches = rows.map(r => ({
+    ...r,
+    athlete_count: Number(r.athlete_count),
+    session_count: Number(r.session_count),
+    test_count: Number(r.test_count),
+  }));
+  res.json({ coaches });
 }));
 
 // Create a new coach account

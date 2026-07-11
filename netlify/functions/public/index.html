@@ -813,10 +813,15 @@
     <h1>教練帳號管理</h1>
     <div class="sub">新增教練帳號 · 各教練資料互相隔離</div>
   </div>
-  <div class="main" style="max-width:900px; margin:0 auto;">
+  <div class="main" style="max-width:1000px; margin:0 auto;">
     <div class="card">
       <h2>平台總覽</h2>
       <div class="stat-strip" id="adminOverviewStrip"></div>
+    </div>
+
+    <div class="charts-grid">
+      <div class="card"><h2>各教練選手數量比較</h2><div class="chart-box"><canvas id="chartCoachAthletes"></canvas></div></div>
+      <div class="card"><h2>各教練訓練/檢測紀錄數比較</h2><div class="chart-box"><canvas id="chartCoachRecords"></canvas></div></div>
     </div>
 
     <div class="card">
@@ -834,7 +839,7 @@
       <h2>教練帳號清單</h2>
       <div style="overflow-x:auto;">
         <table>
-          <thead><tr><th>姓名</th><th>Email</th><th>選手數</th><th>狀態</th><th>建立時間</th><th>操作</th></tr></thead>
+          <thead><tr><th>姓名</th><th>Email</th><th>選手數</th><th>阻力訓練紀錄</th><th>檢測紀錄</th><th>狀態</th><th>建立時間</th><th>操作</th></tr></thead>
           <tbody id="coachTableBody"></tbody>
         </table>
       </div>
@@ -2118,6 +2123,8 @@ async function loadAdminData(){
         <td>${escapeHtml(c.name)}</td>
         <td>${escapeHtml(c.email)}</td>
         <td class="num">${c.athlete_count}</td>
+        <td class="num">${c.session_count}</td>
+        <td class="num">${c.test_count}</td>
         <td>${c.active ? '啟用中' : '<span class="badge badge-other">已停用</span>'}</td>
         <td class="num">${c.created_at}</td>
         <td class="row-actions">
@@ -2126,8 +2133,50 @@ async function loadAdminData(){
           <button class="btn btn-red btn-sm" onclick="deleteCoach(${c.id}, '${escapeHtml(c.name)}')">刪除</button>
         </td>
       </tr>
-    `).join('') || '<tr><td colspan="6" class="hint">尚無教練帳號</td></tr>';
+    `).join('') || '<tr><td colspan="8" class="hint">尚無教練帳號</td></tr>';
+    renderCoachCharts(coaches);
   }catch(e){ showToast(e.message, true); }
+}
+
+let adminCharts = {};
+function destroyAdminChart(key){ if(adminCharts[key]){ adminCharts[key].destroy(); delete adminCharts[key]; } }
+
+function renderCoachCharts(coaches){
+  const sorted = coaches.slice().sort((a,b)=> b.athlete_count - a.athlete_count);
+  const labels = sorted.map(c=>c.name);
+
+  destroyAdminChart('coachAthletes');
+  const athletesEl = document.getElementById('chartCoachAthletes');
+  if(athletesEl){
+    if(!sorted.length){
+      athletesEl.getContext('2d').clearRect(0,0,9999,9999);
+    } else {
+      adminCharts.coachAthletes = new Chart(athletesEl, {
+        type:'bar',
+        data:{ labels, datasets:[
+          { label:'選手數', data: sorted.map(c=>c.athlete_count), backgroundColor:'#0F1B2D' }
+        ]},
+        options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}} }
+      });
+    }
+  }
+
+  destroyAdminChart('coachRecords');
+  const recordsEl = document.getElementById('chartCoachRecords');
+  if(recordsEl){
+    if(!sorted.length){
+      recordsEl.getContext('2d').clearRect(0,0,9999,9999);
+    } else {
+      adminCharts.coachRecords = new Chart(recordsEl, {
+        type:'bar',
+        data:{ labels, datasets:[
+          { label:'阻力訓練紀錄', data: sorted.map(c=>c.session_count), backgroundColor:'#1F9E8E' },
+          { label:'檢測紀錄', data: sorted.map(c=>c.test_count), backgroundColor:'#F2994A' }
+        ]},
+        options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}} }
+      });
+    }
+  }
 }
 
 async function addCoach(){
