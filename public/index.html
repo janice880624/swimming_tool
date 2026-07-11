@@ -1,0 +1,2178 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>阻力訓練監控系統</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+  :root{
+    --navy:#0F1B2D;
+    --navy-2:#152238;
+    --track-red:#C0392B;
+    --lane-white:#F5F3ED;
+    --teal:#1F9E8E;
+    --orange:#F2994A;
+    --slate:#5B6B7C;
+    --ink:#16202C;
+    --bg:#F7F6F2;
+    --card:#FFFFFF;
+    --line:#E4E1D8;
+    --mono: 'JetBrains Mono', 'Courier New', monospace;
+    --disp: 'Oswald', 'Arial Narrow', sans-serif;
+    --body: 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', sans-serif;
+  }
+  @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700;900&family=JetBrains+Mono:wght@400;600&display=swap');
+
+  *{box-sizing:border-box;}
+  body{
+    margin:0; font-family:var(--body); background:var(--bg); color:var(--ink);
+    min-height:100vh;
+  }
+
+  /* signature: track lane header */
+  .track-header{
+    position:relative;
+    background:var(--navy);
+    color:var(--lane-white);
+    padding:22px 28px 20px;
+    overflow:hidden;
+    border-bottom:4px solid var(--track-red);
+  }
+  .track-header::before{
+    content:"";
+    position:absolute; inset:0;
+    background:repeating-linear-gradient(
+      90deg,
+      transparent 0 54px,
+      rgba(245,243,237,0.06) 54px 58px
+    );
+    pointer-events:none;
+  }
+  .track-header h1{
+    font-family:var(--disp); font-weight:700; letter-spacing:.5px;
+    font-size:22px; margin:0 0 2px; position:relative;
+  }
+  .track-header .sub{
+    font-family:var(--mono); font-size:12px; color:#9FB0C3; position:relative;
+  }
+  .track-header .eyebrow{
+    font-family:var(--disp); font-size:11px; letter-spacing:3px;
+    color:var(--track-red); text-transform:uppercase; margin-bottom:6px; position:relative;
+  }
+
+  .layout{ display:flex; min-height:calc(100vh - 88px); }
+
+  /* sidebar */
+  .sidebar{
+    width:250px; flex-shrink:0; background:var(--navy-2); color:var(--lane-white);
+    padding:18px 14px; display:flex; flex-direction:column; gap:14px;
+  }
+  .sidebar h3{
+    font-family:var(--disp); font-size:12px; letter-spacing:2px; text-transform:uppercase;
+    color:#8FA2B8; margin:4px 0 0;
+  }
+  .athlete-list{ display:flex; flex-direction:column; gap:6px; }
+  .athlete-item{
+    display:flex; justify-content:space-between; align-items:center;
+    padding:10px 12px; border-radius:6px; cursor:pointer;
+    border:1px solid transparent; transition:.15s;
+    font-size:14px;
+  }
+  .athlete-item:hover{ background:rgba(255,255,255,0.06); }
+  .athlete-item.active{
+    background:rgba(31,158,142,0.18); border-color:var(--teal); color:#fff;
+  }
+  .athlete-item .del{
+    opacity:0; font-size:12px; color:#E88; padding:2px 6px;
+  }
+  .athlete-item:hover .del{opacity:0.7;}
+  .add-athlete{ display:flex; flex-direction:column; gap:8px; }
+  .add-athlete-row{ display:flex; gap:6px; }
+  .add-athlete input{
+    flex:1; min-width:0; background:#0B1522; border:1px solid #2A3B50; color:#fff;
+    padding:8px 10px; border-radius:6px; font-size:13px; font-family:var(--body);
+  }
+  .add-athlete select{
+    flex-shrink:0; width:64px;
+  }
+  .add-athlete button{
+    flex-shrink:0; white-space:nowrap; width:100%;
+  }
+  .btn{
+    border:none; border-radius:6px; padding:8px 14px; font-family:var(--body);
+    font-weight:700; font-size:13px; cursor:pointer; transition:.15s; white-space:nowrap;
+  }
+  .btn-teal{ background:var(--teal); color:#fff; }
+  .btn-teal:hover{ filter:brightness(1.08); }
+  .btn-outline{ background:transparent; border:1px solid var(--teal); color:var(--teal); }
+  .btn-ghost{ background:transparent; color:#9FB0C3; border:1px solid #2A3B50; }
+  .btn-red{ background:var(--track-red); color:#fff; }
+  .btn-sm{ padding:5px 10px; font-size:12px; }
+
+  /* main */
+  .main{ flex:1; min-width:0; padding:22px 28px; overflow-x:auto; }
+  .tabs{ display:flex; gap:4px; margin-bottom:20px; border-bottom:2px solid var(--line); flex-wrap:wrap; }
+
+  .module-switcher{ display:flex; gap:10px; margin-bottom:18px; flex-wrap:wrap; }
+  .module-btn{
+    flex:1; min-width:180px; padding:12px 16px; border-radius:8px; border:2px solid var(--line);
+    background:#fff; color:var(--slate); font-family:var(--disp); font-weight:600; font-size:14px;
+    cursor:pointer; transition:.15s; text-align:center;
+  }
+  .module-btn:hover{ border-color:var(--teal); }
+  .module-btn.active{ border-color:var(--navy); background:var(--navy); color:#fff; }
+  .tab{
+    padding:10px 18px; cursor:pointer; font-weight:700; font-size:14px;
+    color:var(--slate); border-bottom:3px solid transparent; margin-bottom:-2px;
+    font-family:var(--body);
+  }
+  .tab.active{ color:var(--navy); border-bottom-color:var(--track-red); }
+  .panel{ display:none; }
+  .panel.active{ display:block; }
+
+  .card{
+    background:var(--card); border:1px solid var(--line); border-radius:10px;
+    padding:18px 20px; margin-bottom:18px;
+  }
+  .card h2{ font-family:var(--disp); font-size:16px; margin:0 0 14px; color:var(--navy); letter-spacing:.3px;}
+  .card h2 .tag{ font-family:var(--mono); font-size:11px; color:var(--slate); font-weight:400; margin-left:8px;}
+
+  .form-grid{
+    display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:12px 14px;
+  }
+  .field label{
+    display:block; font-size:12px; color:var(--slate); margin-bottom:4px; font-weight:700;
+  }
+  .field input, .field select{
+    width:100%; padding:9px 10px; border:1px solid var(--line); border-radius:6px;
+    font-family:var(--mono); font-size:14px; background:#FCFCFA; color:var(--ink);
+  }
+  .field input:focus, .field select:focus{ outline:2px solid var(--teal); border-color:var(--teal); }
+  .form-actions{ margin-top:16px; display:flex; gap:10px; align-items:center; }
+  .hint{ font-size:12px; color:var(--slate); }
+
+  table{ width:100%; border-collapse:collapse; font-size:13px; }
+  th, td{ padding:9px 8px; border-bottom:1px solid var(--line); text-align:center; white-space:nowrap; }
+  th{ background:#F0EEE7; color:var(--navy); font-family:var(--disp); font-weight:600; font-size:12px; letter-spacing:.3px; }
+  td.num{ font-family:var(--mono); }
+  tr:hover td{ background:#FAFAF7; }
+  .row-actions button{ margin:0 2px; }
+
+  .empty{
+    text-align:center; padding:50px 20px; color:var(--slate);
+  }
+  .empty .big{ font-family:var(--disp); font-size:15px; color:var(--navy); margin-bottom:6px; }
+
+  .stat-strip{ display:flex; gap:14px; flex-wrap:wrap; margin-bottom:4px; }
+  .stat{
+    background:var(--navy); color:#fff; border-radius:8px; padding:12px 18px; min-width:110px;
+    position:relative; overflow:hidden;
+  }
+  .stat::after{
+    content:""; position:absolute; left:0; right:0; bottom:0; height:3px; background:var(--teal);
+  }
+  .stat .v{ font-family:var(--mono); font-size:22px; font-weight:600; }
+  .stat .l{ font-size:11px; color:#9FB0C3; margin-top:2px; }
+
+  .charts-grid{ display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+  @media (max-width:980px){ .charts-grid{ grid-template-columns:1fr; } }
+  .chart-box{ position:relative; height:260px; }
+
+  select#teamAthleteFilter, select#eventTypeSel{ min-width:140px; }
+
+  .filters{ display:flex; gap:10px; margin-bottom:14px; flex-wrap:wrap; align-items:end; }
+
+  textarea{
+    width:100%; font-family:var(--body); font-size:13px; border:1px solid var(--line);
+    border-radius:6px; padding:8px 10px; resize:vertical;
+  }
+
+  .io-grid{ display:flex; gap:16px; flex-wrap:wrap; }
+  .io-card{ flex:1; min-width:260px; }
+
+  .badge{ display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; font-family:var(--mono); }
+  .badge-pull{ background:#E7F5F2; color:var(--teal); }
+  .badge-kick{ background:#FDEEE0; color:var(--orange); }
+  .badge-full{ background:#EAEAF7; color:#5B4FBF; }
+  .badge-other{ background:#EEE; color:var(--slate); }
+
+  ::-webkit-scrollbar{ height:8px; width:8px; }
+  ::-webkit-scrollbar-thumb{ background:#D6D2C6; border-radius:4px; }
+
+  @media (max-width:760px){
+    .layout{ flex-direction:column; }
+    .sidebar{ width:100%; flex-direction:row; flex-wrap:wrap; align-items:flex-start; gap:10px; }
+    .sidebar h3{ width:100%; }
+    .add-athlete{ width:100%; }
+    .athlete-list{ width:100%; max-height:180px; overflow-y:auto; }
+    .sidebar > button{ width:100%; }
+    .main{ padding:16px; }
+    .form-grid{ grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); }
+  }
+
+  @media print{
+    .sidebar, .track-header, #mainTabs, #selectAthletePrompt, .no-print{ display:none !important; }
+    .main{ padding:0; overflow:visible; }
+    .panel{ display:none !important; }
+    .panel.active{ display:block !important; }
+    body{ background:#fff; }
+    .card{ border:none; box-shadow:none; }
+  }
+
+  .modal-overlay{
+    position:fixed; inset:0; background:rgba(15,27,45,0.55); display:none;
+    align-items:center; justify-content:center; z-index:1000;
+  }
+  .modal-overlay.show{ display:flex; }
+  .modal-box{
+    background:#fff; border-radius:10px; padding:22px 24px; max-width:360px; width:90%;
+    box-shadow:0 12px 40px rgba(0,0,0,0.25);
+  }
+  .modal-box p{ margin:0 0 18px; font-size:14px; color:var(--ink); line-height:1.6; }
+  .modal-actions{ display:flex; justify-content:flex-end; gap:8px; }
+
+  .toast-wrap{
+    position:fixed; top:16px; right:16px; z-index:1100; display:flex; flex-direction:column; gap:8px;
+  }
+  .toast{
+    background:var(--navy); color:#fff; padding:10px 16px; border-radius:6px; font-size:13px;
+    box-shadow:0 6px 18px rgba(0,0,0,0.2); border-left:4px solid var(--teal);
+    animation:toastin .15s ease-out;
+  }
+  .toast.error{ border-left-color:var(--track-red); }
+  @keyframes toastin{ from{opacity:0; transform:translateY(-6px);} to{opacity:1; transform:translateY(0);} }  .login-wrap{ display:flex; align-items:center; justify-content:center; min-height:100vh; background:var(--bg); }
+  .login-box{ width:360px; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:32px; }
+  .login-box h1{ font-family:var(--disp); font-size:20px; text-align:center; margin:0 0 6px; color:var(--navy); }
+  .login-box .sub{ text-align:center; font-family:var(--mono); font-size:12px; color:var(--slate); margin-bottom:22px; }
+  .header-user{ position:absolute; top:20px; right:28px; font-family:var(--mono); font-size:12px; color:#9FB0C3; display:flex; align-items:center; gap:12px; }
+  .header-user button{ font-family:var(--body); }
+</style>
+</head>
+<body>
+
+<div id="loginScreen" class="login-wrap">
+  <div class="login-box">
+    <h1>教練管理平台</h1>
+    <div class="sub">阻力訓練監控系統 · 登入</div>
+    <div class="field"><label>Email</label><input type="email" id="loginEmail"></div>
+    <div class="field" style="margin-top:10px;"><label>密碼</label><input type="password" id="loginPassword"></div>
+    <button id="loginBtn" style="width:100%;margin-top:18px;">登入</button>
+    <div class="error" id="loginError" style="color:var(--track-red); font-size:13px; margin-top:10px; text-align:center;"></div>
+  </div>
+</div>
+
+<div id="coachAppRoot" style="display:none;">
+
+<div class="track-header">
+  <div class="header-user">
+    <span id="coachWhoami"></span>
+    <button class="btn btn-ghost btn-sm" onclick="logout()">登出</button>
+  </div>
+  <div class="eyebrow">Land Fitness · 田徑阻力訓練器</div>
+  <h1>阻力訓練監控系統</h1>
+  <div class="sub">選手數據記錄 · 縱向分析 · 游泳專項應用 &nbsp;|&nbsp; Peak / Avg Power · ACWR-ready</div>
+</div>
+
+<div class="layout">
+  <div class="sidebar">
+    <h3>選手名單</h3>
+    <div class="add-athlete">
+      <div class="add-athlete-row">
+        <input id="newAthleteName" placeholder="快速新增姓名" />
+        <select id="newAthleteGender" style="background:#0B1522; border:1px solid #2A3B50; color:#fff; border-radius:6px; padding:8px 6px; font-size:13px;">
+          <option value="M">男</option>
+          <option value="F">女</option>
+        </select>
+      </div>
+      <button class="btn btn-teal btn-sm" onclick="addAthlete()">新增選手</button>
+    </div>
+    <div class="athlete-list" id="athleteList"></div>
+    <button class="btn btn-outline btn-sm" style="width:100%;" onclick="goToTab('athletes')">完整選手管理 →</button>
+    <div style="margin-top:auto; padding-top:10px; border-top:1px solid #2A3B50;">
+      <div class="hint" style="color:#7C8FA6;">共 <span id="athleteCount">0</span> 位選手 · <span id="sessionCount">0</span> 筆測試紀錄</div>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="card" id="selectAthletePrompt" style="text-align:center; padding:60px 20px;">
+      <div class="big" style="font-family:var(--disp); font-size:16px; color:var(--navy); margin-bottom:8px;">請從左側選手名單點擊一位選手</div>
+      <div class="hint">選擇選手後，即可查看該選手的新增測試、歷史記錄與分析圖表</div>
+    </div>
+
+    <div class="module-switcher" id="moduleSwitcher">
+      <button class="module-btn active" data-module="resistance" onclick="switchModule('resistance')">🏋️ 阻力訓練紀錄</button>
+      <button class="module-btn" data-module="test" onclick="switchModule('test')">🏊 游泳檢測紀錄</button>
+    </div>
+
+    <div id="resistanceModule">
+    <div class="tabs" id="mainTabs">
+      <div class="tab active" data-tab="entry">新增測試</div>
+      <div class="tab" data-tab="history">歷史記錄</div>
+      <div class="tab" data-tab="analysis">分析圖表</div>
+      <div class="tab" data-tab="report">教練報表</div>
+      <div class="tab" data-tab="io">匯出 / 匯入</div>
+    </div>
+
+    <!-- ATHLETES MANAGEMENT -->
+    <!-- ENTRY -->
+    <div class="panel active" id="panel-entry">
+      <div class="card" id="noAthleteEntryWarning" style="display:none;">
+        <div class="empty"><div class="big">請先於左側新增並選擇一位選手</div>再輸入測試數據</div>
+      </div>
+      <div id="entryFormWrap">
+        <div class="card">
+          <h2>測試記錄輸入 <span class="tag" id="currentAthleteTag"></span></h2>
+          <div class="form-grid">
+            <div class="field"><label>測試日期</label><input type="date" id="f_date"></div>
+            <div class="field"><label>阻力等級 (Level)</label><input type="text" id="f_resistance" placeholder="例：1L"></div>
+            <div class="field"><label>訓練類型</label>
+              <select id="f_type">
+                <option value="拉">拉臂 (Pull)</option>
+                <option value="踢">踢腿 (Kick)</option>
+                <option value="全泳">全泳 (Full stroke)</option>
+                <option value="其他">其他</option>
+              </select>
+            </div>
+            <div class="field"><label>左右手測試</label>
+              <select id="f_side">
+                <option value="雙">雙手</option>
+                <option value="左">左手</option>
+                <option value="右">右手</option>
+              </select>
+            </div>
+            <div class="field"><label>峰值功率 (W)</label><input type="number" step="any" id="f_peak"></div>
+            <div class="field"><label>平均功率 (W)</label><input type="number" step="any" id="f_avg"></div>
+            <div class="field"><label>占比 (%)</label><input type="number" step="any" id="f_ratio" placeholder="自動計算，可覆寫"></div>
+            <div class="field"><label>訓練次數</label><input type="number" step="any" id="f_reps"></div>
+            <div class="field"><label>最大速度 (m/s)</label><input type="number" step="any" id="f_maxspeed"></div>
+            <div class="field"><label>平均速度 (m/s)</label><input type="number" step="any" id="f_avgspeed"></div>
+            <div class="field"><label>加速時間 (s)</label><input type="number" step="any" id="f_accel"></div>
+            <div class="field"><label>單次距離 (m)</label><input type="number" step="any" id="f_dist"></div>
+            <div class="field"><label>總最大速度 (m/s)</label><input type="number" step="any" id="f_totmaxspeed"></div>
+            <div class="field"><label>總距離 (m)</label><input type="number" step="any" id="f_totdist"></div>
+          </div>
+          <div class="field" style="margin-top:12px;"><label>備註</label><textarea id="f_note" rows="2" placeholder="訓練備註、主觀感受等"></textarea></div>
+          <div class="form-actions">
+            <button class="btn btn-teal" onclick="saveSession()">儲存這筆測試</button>
+            <span class="hint">占比未填寫時將自動以「平均功率 ÷ 峰值功率 × 100」計算</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- HISTORY -->
+    <div class="panel" id="panel-history">
+      <div class="card">
+        <h2>歷史記錄 <span class="tag" id="historyAthleteTag"></span></h2>
+        <div class="filters">
+          <div class="field" style="min-width:140px;"><label>篩選類型</label>
+            <select id="eventTypeSel" onchange="renderHistory()">
+              <option value="all">全部類型</option>
+              <option value="拉">拉臂</option>
+              <option value="踢">踢腿</option>
+              <option value="全泳">全泳</option>
+              <option value="其他">其他</option>
+            </select>
+          </div>
+        </div>
+        <div class="stat-strip" id="statStrip"></div>
+      </div>
+      <div class="card">
+        <h2>測試紀錄一覽</h2>
+        <div style="overflow-x:auto;">
+          <table id="historyTable">
+            <thead><tr>
+              <th>日期</th><th>類型</th><th>左右手</th><th>阻力</th>
+              <th>峰值功率</th><th>平均功率</th><th>占比%</th><th>次數</th>
+              <th>最大速度</th><th>平均速度</th><th>加速時間</th><th>距離</th><th>總最大速度</th><th>總距離</th><th>操作</th>
+            </tr></thead>
+            <tbody id="historyBody"></tbody>
+          </table>
+        </div>
+        <div class="empty" id="historyEmpty" style="display:none;">尚無測試紀錄，請至「新增測試」頁籤輸入</div>
+      </div>
+    </div>
+
+    <!-- ANALYSIS -->
+    <div class="panel" id="panel-analysis">
+      <div class="card">
+        <div class="filters">
+          <div class="field" style="min-width:200px;"><label>分析選手</label>
+            <select id="analysisAthleteSel" onchange="renderAnalysis()"></select>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>歷史最佳紀錄 <span class="tag">Personal Best</span></h2>
+        <div class="stat-strip" id="pbStrip"></div>
+      </div>
+
+      <div class="charts-grid">
+        <div class="card"><h2>功率趨勢 <span class="tag">峰值 / 平均功率 (W)</span></h2><div class="chart-box"><canvas id="chartPower"></canvas></div></div>
+        <div class="card"><h2>功率耐力比 <span class="tag">占比 % · 越高代表越能維持輸出</span></h2><div class="chart-box"><canvas id="chartRatio"></canvas></div></div>
+        <div class="card"><h2>速度趨勢 <span class="tag">最大 / 平均 / 總最大速度 (m/s)</span></h2><div class="chart-box"><canvas id="chartSpeed"></canvas></div></div>
+        <div class="card"><h2>訓練量趨勢 <span class="tag">距離 (m) / 次數</span></h2><div class="chart-box"><canvas id="chartVolume"></canvas></div></div>
+        <div class="card"><h2>左右手平衡分析 <span class="tag">最新左右手數據比較</span></h2><div class="chart-box"><canvas id="chartBalance"></canvas></div><div id="balanceStats" style="margin-top:10px; font-size:13px; color:var(--slate); font-family:var(--mono);"></div></div>
+        <div class="card"><h2>最新表現雷達圖 <span class="tag">相對全隊平均，越大越好</span></h2><div class="chart-box"><canvas id="chartRadar"></canvas></div></div>
+      </div>
+    </div>
+
+    <!-- COACH REPORT -->
+    <div class="panel" id="panel-report">
+      <div class="card" id="reportPrintArea">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px;">
+          <div>
+            <h2 style="margin:0;">教練管理報表</h2>
+            <div class="hint" id="reportGeneratedAt"></div>
+          </div>
+          <button class="btn btn-teal btn-sm no-print" onclick="window.print()">列印 / 匯出 PDF</button>
+        </div>
+
+        <div style="margin-top:18px;">
+          <h2 style="font-size:14px;">選手基本資料</h2>
+          <div class="stat-strip" id="reportProfileStrip"></div>
+        </div>
+
+        <div style="margin-top:18px;">
+          <h2 style="font-size:14px;">歷史最佳紀錄</h2>
+          <div class="stat-strip" id="reportPBStrip"></div>
+        </div>
+
+        <div style="margin-top:18px;">
+          <h2 style="font-size:14px;">最近測試摘要</h2>
+          <div style="overflow-x:auto;">
+            <table id="reportRecentTable">
+              <thead><tr>
+                <th>日期</th><th>類型</th><th>左右手</th><th>峰值功率</th><th>平均功率</th><th>占比%</th><th>最大速度</th><th>平均速度</th><th>距離</th>
+              </tr></thead>
+              <tbody id="reportRecentBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div style="margin-top:18px;">
+          <h2 style="font-size:14px;">教練備註</h2>
+          <div id="reportNote" style="font-size:13px; color:var(--ink); white-space:pre-wrap;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- IO -->
+    <div class="panel" id="panel-io">
+      <div class="io-grid">
+        <div class="card io-card">
+          <h2>匯出資料</h2>
+          <p class="hint">將所有選手與測試紀錄匯出為 JSON 檔，可作為備份或匯入其他裝置。</p>
+          <button class="btn btn-teal" onclick="exportData()">匯出 JSON</button>
+        </div>
+        <div class="card io-card">
+          <h2>匯入資料</h2>
+          <p class="hint">匯入先前匯出的 JSON 檔（將合併至現有資料，同 ID 將被覆蓋）。</p>
+          <input type="file" id="importFile" accept="application/json" />
+          <div style="margin-top:10px;"><button class="btn btn-outline" onclick="importData()">匯入</button></div>
+        </div>
+      </div>
+    </div>
+
+    </div>
+    <!-- END resistanceModule -->
+
+    <div id="testModule" style="display:none;">
+      <div class="tabs" id="testTabs">
+        <div class="tab active" data-tab="test-entry">新增檢測</div>
+        <div class="tab" data-tab="test-history">檢測歷史</div>
+        <div class="tab" data-tab="test-analysis">檢測分析</div>
+      </div>
+
+      <!-- TEST ENTRY -->
+      <div class="panel active" id="panel-test-entry">
+        <div class="card">
+          <h2>檢測紀錄輸入 <span class="tag" id="testCurrentAthleteTag"></span></h2>
+          <div class="form-grid">
+            <div class="field"><label>檢測日期</label><input type="date" id="t_date"></div>
+            <div class="field"><label>檢測類別</label>
+              <select id="t_category">
+                <option value="泳池計時">泳池計時測驗</option>
+                <option value="划頻划距">划頻/划距/呼吸分析</option>
+                <option value="體能爆發力">體能爆發力測驗</option>
+                <option value="綜合">綜合檢測</option>
+              </select>
+            </div>
+            <div class="field"><label>泳姿</label>
+              <select id="t_stroke">
+                <option value="自由式">自由式</option>
+                <option value="蛙式">蛙式</option>
+                <option value="仰式">仰式</option>
+                <option value="蝶式">蝶式</option>
+                <option value="混合式">混合式</option>
+              </select>
+            </div>
+          </div>
+
+          <h2 style="font-size:14px; margin-top:18px;">泳池計時測驗</h2>
+          <div class="form-grid">
+            <div class="field"><label>測驗距離 (m)</label>
+              <input type="text" id="t_distance" list="t_distance_options" placeholder="例：50">
+              <datalist id="t_distance_options">
+                <option value="25"></option>
+                <option value="50"></option>
+                <option value="100"></option>
+                <option value="200"></option>
+                <option value="400"></option>
+              </datalist>
+            </div>
+            <div class="field"><label>總時間 (s)</label><input type="number" step="any" id="t_totaltime"></div>
+            <div class="field"><label>分段時間（選填）</label><input type="text" id="t_splits" placeholder="例：25m 12.3s / 50m 25.1s"></div>
+          </div>
+
+          <h2 style="font-size:14px; margin-top:18px;">划頻 / 划距 / 呼吸頻率</h2>
+          <div class="form-grid">
+            <div class="field"><label>划頻 (次/分鐘)</label><input type="number" step="any" id="t_strokerate"></div>
+            <div class="field"><label>划距 (m/次)</label><input type="number" step="any" id="t_strokelength"></div>
+            <div class="field"><label>呼吸頻率</label><input type="text" id="t_breath" placeholder="例：每2划1次"></div>
+          </div>
+
+          <h2 style="font-size:14px; margin-top:18px;">體能爆發力測驗</h2>
+          <div class="form-grid">
+            <div class="field"><label>垂直跳 (cm)</label><input type="number" step="any" id="t_vjump"></div>
+            <div class="field"><label>立定跳遠 (cm)</label><input type="number" step="any" id="t_ljump"></div>
+            <div class="field"><label>握力-左 (kg)</label><input type="number" step="any" id="t_gripL"></div>
+            <div class="field"><label>握力-右 (kg)</label><input type="number" step="any" id="t_gripR"></div>
+            <div class="field"><label>柔軟度-坐姿體前彎 (cm)</label><input type="number" step="any" id="t_flex"></div>
+          </div>
+
+          <div class="field" style="margin-top:12px;"><label>備註</label><textarea id="t_note" rows="2" placeholder="檢測備註"></textarea></div>
+          <div class="form-actions">
+            <button class="btn btn-teal" onclick="saveTestRecord()">儲存這筆檢測</button>
+            <span class="hint">所有欄位皆可留空，依當次檢測項目填寫即可</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- TEST HISTORY -->
+      <div class="panel" id="panel-test-history">
+        <div class="card">
+          <h2>檢測歷史 <span class="tag" id="testHistoryAthleteTag"></span></h2>
+          <div class="filters">
+            <div class="field" style="min-width:160px;"><label>篩選類別</label>
+              <select id="testCategoryFilter" onchange="renderTestHistory()">
+                <option value="all">全部類別</option>
+                <option value="泳池計時">泳池計時測驗</option>
+                <option value="划頻划距">划頻/划距/呼吸分析</option>
+                <option value="體能爆發力">體能爆發力測驗</option>
+                <option value="綜合">綜合檢測</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div style="overflow-x:auto;">
+            <table id="testHistoryTable">
+              <thead><tr>
+                <th>日期</th><th>類別</th><th>泳姿</th><th>距離</th><th>總時間</th>
+                <th>划頻</th><th>划距</th><th>呼吸頻率</th><th>垂直跳</th><th>立定跳遠</th><th>握力L/R</th><th>柔軟度</th><th>操作</th>
+              </tr></thead>
+              <tbody id="testHistoryBody"></tbody>
+            </table>
+          </div>
+          <div class="empty" id="testHistoryEmpty" style="display:none;">尚無檢測紀錄</div>
+        </div>
+      </div>
+
+      <!-- TEST ANALYSIS -->
+      <div class="panel" id="panel-test-analysis">
+        <div class="card">
+          <h2>檢測歷史最佳紀錄 <span class="tag">Personal Best</span></h2>
+          <div class="stat-strip" id="testPBStrip"></div>
+        </div>
+        <div class="charts-grid">
+          <div class="card"><h2>泳池成績趨勢 <span class="tag">時間 (s)，越低越好</span></h2><div class="chart-box"><canvas id="chartPoolTime"></canvas></div></div>
+          <div class="card"><h2>划頻 / 划距趨勢</h2><div class="chart-box"><canvas id="chartStroke"></canvas></div></div>
+          <div class="card"><h2>體能爆發力趨勢 <span class="tag">垂直跳 / 立定跳遠 / 柔軟度</span></h2><div class="chart-box"><canvas id="chartFitness"></canvas></div></div>
+          <div class="card"><h2>握力左右比較 <span class="tag">最新一筆</span></h2><div class="chart-box"><canvas id="chartGrip"></canvas></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel" id="panel-athletes">
+      <div class="card" style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
+        <h2 style="margin:0;">所有選手管理</h2>
+        <button class="btn btn-ghost btn-sm" onclick="goToTab(lastMainTab)">← 返回選手數據</button>
+      </div>
+      <div class="stat-strip" id="athleteStatStrip"></div>
+
+      <div class="card">
+        <h2>新增選手</h2>
+        <div class="form-grid">
+          <div class="field"><label>姓名</label><input type="text" id="am_name" placeholder="選手姓名"></div>
+          <div class="field"><label>性別</label>
+            <select id="am_gender"><option value="M">男</option><option value="F">女</option></select>
+          </div>
+          <div class="field"><label>專項</label>
+            <select id="am_event" onchange="toggleCustomEvent('am')">
+              <option value="自由式">自由式</option>
+              <option value="蛙式">蛙式</option>
+              <option value="仰式">仰式</option>
+              <option value="蝶式">蝶式</option>
+              <option value="混合式">混合式</option>
+              <option value="其他">其他</option>
+            </select>
+          </div>
+          <div class="field" id="am_event_custom_wrap" style="display:none;"><label>專項（自訂）</label><input type="text" id="am_event_custom" placeholder="輸入自訂專項"></div>
+          <div class="field"><label>身高 (cm)</label><input type="number" step="any" id="am_height" placeholder="例：170"></div>
+          <div class="field"><label>體重 (kg)</label><input type="number" step="any" id="am_weight" placeholder="例：60"></div>
+          <div class="field"><label>年齡</label><input type="number" step="1" id="am_age" placeholder="例：20"></div>
+        </div>
+        <div class="field" style="margin-top:12px;"><label>備註</label><textarea id="am_note" rows="2" placeholder="選手相關備註"></textarea></div>
+        <div class="form-actions"><button class="btn btn-teal" onclick="addAthleteFull()">新增選手</button></div>
+      </div>
+
+      <div class="card">
+        <div class="filters">
+          <div class="field" style="min-width:220px;"><label>搜尋選手</label><input type="text" id="am_search" placeholder="輸入姓名搜尋" oninput="renderAthleteManagement()"></div>
+          <div class="field" style="min-width:140px;"><label>篩選性別</label>
+            <select id="am_genderFilter" onchange="renderAthleteManagement()">
+              <option value="all">全部</option><option value="M">男</option><option value="F">女</option>
+            </select>
+          </div>
+        </div>
+        <h2>選手清單</h2>
+        <div style="overflow-x:auto;">
+          <table id="athleteMgmtTable">
+            <thead><tr>
+              <th>姓名</th><th>性別</th><th>專項</th><th>身高</th><th>體重</th><th>年齡</th><th>測試次數</th><th>最新測試日期</th><th>最新峰值功率</th><th>備註</th><th>操作</th>
+            </tr></thead>
+            <tbody id="athleteMgmtBody"></tbody>
+          </table>
+        </div>
+        <div class="empty" id="athleteMgmtEmpty" style="display:none;">尚無選手資料，請先於上方新增</div>
+      </div>
+
+      <div class="module-switcher" id="mgmtSwitcher">
+        <button class="module-btn active" data-mgmt="resistance" onclick="switchMgmtView('resistance')">🏋️ 阻力訓練數據</button>
+        <button class="module-btn" data-mgmt="test" onclick="switchMgmtView('test')">🏊 游泳檢測數據</button>
+      </div>
+
+      <div id="mgmtResistanceSection">
+      <div class="card">
+        <h2>全隊測試紀錄 <span class="tag">跨選手總覽</span></h2>
+        <div class="filters">
+          <div class="field" style="min-width:160px;"><label>篩選選手</label>
+            <select id="teamAthleteFilter" onchange="renderTeamHistory()"><option value="all">全部選手</option></select>
+          </div>
+          <div class="field" style="min-width:140px;"><label>篩選類型</label>
+            <select id="teamTypeFilter" onchange="renderTeamHistory()">
+              <option value="all">全部類型</option>
+              <option value="拉">拉臂</option>
+              <option value="踢">踢腿</option>
+              <option value="全泳">全泳</option>
+              <option value="其他">其他</option>
+            </select>
+          </div>
+        </div>
+        <div class="stat-strip" id="teamStatStrip"></div>
+        <div style="overflow-x:auto; margin-top:10px;">
+          <table id="teamHistoryTable">
+            <thead><tr>
+              <th>日期</th><th>選手</th><th>類型</th><th>左右手</th><th>阻力</th>
+              <th>峰值功率</th><th>平均功率</th><th>占比%</th><th>次數</th>
+              <th>最大速度</th><th>平均速度</th><th>加速時間</th><th>距離</th><th>總最大速度</th><th>總距離</th>
+            </tr></thead>
+            <tbody id="teamHistoryBody"></tbody>
+          </table>
+        </div>
+        <div class="empty" id="teamHistoryEmpty" style="display:none;">尚無測試紀錄</div>
+      </div>
+
+      <div class="card">
+        <h2>選手最新峰值功率比較</h2>
+        <div class="chart-box"><canvas id="chartCompare"></canvas></div>
+      </div>
+
+      <div class="card">
+        <h2>男女常態分佈比較 <span class="tag">依性別分組，選手最新一筆數據落點</span></h2>
+        <div class="filters">
+          <div class="field" style="min-width:200px;"><label>比較選手（標示落點）</label>
+            <select id="normAthleteSel" onchange="renderTeamAnalysis()"></select>
+          </div>
+          <div class="field" style="min-width:180px;"><label>比較指標</label>
+            <select id="normMetricSel" onchange="renderTeamAnalysis()">
+              <option value="peak">峰值功率 (W)</option>
+              <option value="avg">平均功率 (W)</option>
+              <option value="ratio">占比 (%)</option>
+              <option value="maxSpeed">最大速度 (m/s)</option>
+              <option value="avgSpeed">平均速度 (m/s)</option>
+              <option value="dist">距離 (m)</option>
+              <option value="reps">次數</option>
+            </select>
+          </div>
+        </div>
+        <div class="chart-box" style="height:300px;"><canvas id="chartNorm"></canvas></div>
+        <div id="normStats" style="margin-top:12px; font-size:13px; color:var(--slate); font-family:var(--mono);"></div>
+      </div>
+      </div>
+
+      <div id="mgmtTestSection" style="display:none;">
+      <div class="card">
+        <h2>全隊檢測紀錄 <span class="tag">跨選手總覽</span></h2>
+        <div class="filters">
+          <div class="field" style="min-width:160px;"><label>篩選選手</label>
+            <select id="teamTestAthleteFilter" onchange="renderTeamTestHistory()"><option value="all">全部選手</option></select>
+          </div>
+          <div class="field" style="min-width:140px;"><label>篩選類別</label>
+            <select id="teamTestCategoryFilter" onchange="renderTeamTestHistory()">
+              <option value="all">全部類別</option>
+              <option value="泳池計時">泳池計時測驗</option>
+              <option value="划頻划距">划頻/划距/呼吸分析</option>
+              <option value="體能爆發力">體能爆發力測驗</option>
+              <option value="綜合">綜合檢測</option>
+            </select>
+          </div>
+        </div>
+        <div style="overflow-x:auto; margin-top:10px;">
+          <table id="teamTestHistoryTable">
+            <thead><tr>
+              <th>日期</th><th>選手</th><th>類別</th><th>泳姿</th><th>距離</th><th>總時間</th>
+              <th>划頻</th><th>划距</th><th>呼吸頻率</th><th>垂直跳</th><th>立定跳遠</th><th>握力L/R</th><th>柔軟度</th>
+            </tr></thead>
+            <tbody id="teamTestHistoryBody"></tbody>
+          </table>
+        </div>
+        <div class="empty" id="teamTestHistoryEmpty" style="display:none;">尚無檢測紀錄</div>
+      </div>
+
+      <div class="card">
+        <h2>選手最佳計時比較 <span class="tag">依距離篩選，同距離才能比較</span></h2>
+        <div class="filters">
+          <div class="field" style="min-width:160px;"><label>比較距離</label>
+            <select id="teamTestDistanceSel" onchange="renderTeamTestAnalysis()"></select>
+          </div>
+        </div>
+        <div class="chart-box"><canvas id="chartTestCompare"></canvas></div>
+      </div>
+      </div>
+    </div>
+
+
+  </div>
+</div>
+
+</div>
+<!-- END coachAppRoot -->
+
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal-box">
+    <p id="modalMessage"></p>
+    <div class="modal-actions">
+      <button class="btn btn-ghost btn-sm" id="modalCancelBtn">取消</button>
+      <button class="btn btn-red btn-sm" id="modalConfirmBtn">確定</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="editModalOverlay">
+  <div class="modal-box" style="max-width:460px;">
+    <h2 style="font-family:var(--disp); font-size:15px; margin:0 0 14px; color:var(--navy);">編輯選手資料</h2>
+    <div class="form-grid" style="grid-template-columns:1fr 1fr;">
+      <div class="field"><label>姓名</label><input type="text" id="edit_name"></div>
+      <div class="field"><label>性別</label><select id="edit_gender"><option value="M">男</option><option value="F">女</option></select></div>
+      <div class="field"><label>專項</label>
+        <select id="edit_event" onchange="toggleCustomEvent('edit')">
+          <option value="自由式">自由式</option>
+          <option value="蛙式">蛙式</option>
+          <option value="仰式">仰式</option>
+          <option value="蝶式">蝶式</option>
+          <option value="混合式">混合式</option>
+          <option value="其他">其他</option>
+        </select>
+      </div>
+      <div class="field" id="edit_event_custom_wrap" style="display:none;"><label>專項（自訂）</label><input type="text" id="edit_event_custom"></div>
+      <div class="field"><label>身高 (cm)</label><input type="number" step="any" id="edit_height"></div>
+      <div class="field"><label>體重 (kg)</label><input type="number" step="any" id="edit_weight"></div>
+      <div class="field"><label>年齡</label><input type="number" step="1" id="edit_age"></div>
+    </div>
+    <div class="field" style="margin-top:10px;"><label>備註</label><textarea id="edit_note" rows="2"></textarea></div>
+    <div class="modal-actions" style="margin-top:16px;">
+      <button class="btn btn-ghost btn-sm" onclick="closeEditModal()">取消</button>
+      <button class="btn btn-teal btn-sm" onclick="saveEditAthlete()">儲存</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-wrap" id="toastWrap"></div>
+
+<div id="adminAppRoot" style="display:none;">
+  <div class="track-header">
+    <div class="header-user">
+      <span id="adminWhoami"></span>
+      <button class="btn btn-ghost btn-sm" onclick="logout()">登出</button>
+    </div>
+    <div class="eyebrow">阻力訓練監控系統 · 平台管理</div>
+    <h1>教練帳號管理</h1>
+    <div class="sub">新增教練帳號 · 各教練資料互相隔離</div>
+  </div>
+  <div class="main" style="max-width:900px; margin:0 auto;">
+    <div class="card">
+      <h2>平台總覽</h2>
+      <div class="stat-strip" id="adminOverviewStrip"></div>
+    </div>
+
+    <div class="card">
+      <h2>新增教練帳號</h2>
+      <div class="form-grid">
+        <div class="field"><label>姓名</label><input type="text" id="newCoachName"></div>
+        <div class="field"><label>Email</label><input type="email" id="newCoachEmail"></div>
+        <div class="field"><label>密碼</label><input type="password" id="newCoachPassword" placeholder="至少 6 碼"></div>
+      </div>
+      <div class="form-actions"><button class="btn btn-teal" onclick="addCoach()">新增教練</button></div>
+      <div class="error" id="addCoachError" style="color:var(--track-red); font-size:13px; margin-top:8px;"></div>
+    </div>
+
+    <div class="card">
+      <h2>教練帳號清單</h2>
+      <div style="overflow-x:auto;">
+        <table>
+          <thead><tr><th>姓名</th><th>Email</th><th>選手數</th><th>狀態</th><th>建立時間</th><th>操作</th></tr></thead>
+          <tbody id="coachTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let athletes = [];
+let sessionsMap = {}; // athleteId -> array (resistance training records)
+let testsMap = {}; // athleteId -> array (swim coach test records)
+let currentAthleteId = null;
+let currentModule = 'resistance'; // 'resistance' | 'test'
+let charts = {};
+
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+
+/* ---- Auth & API ---- */
+let authToken = localStorage.getItem('authToken') || null;
+let currentUser = null; // {id, role, name, email}
+
+async function apiFetch(path, opts={}){
+  const headers = Object.assign({'Content-Type':'application/json'}, opts.headers||{});
+  if(authToken) headers['Authorization'] = 'Bearer '+authToken;
+  const res = await fetch('/api'+path, Object.assign({}, opts, {headers}));
+  let data = null;
+  try{ data = await res.json(); }catch(e){ /* no body */ }
+  if(!res.ok){ throw new Error((data && data.error) || ('請求失敗 ('+res.status+')')); }
+  return data;
+}
+
+function mapSessionFromApi(row){
+  return { id:row.id, date:row.date, type:row.type, side:row.side, resistance:row.resistance,
+    peak:row.peak, avg:row.avg, ratio:row.ratio, reps:row.reps, maxSpeed:row.max_speed,
+    avgSpeed:row.avg_speed, accel:row.accel, dist:row.dist, totMaxSpeed:row.tot_max_speed,
+    totDist:row.tot_dist, note:row.note };
+}
+function mapTestFromApi(row){
+  return { id:row.id, date:row.date, category:row.category, stroke:row.stroke, distance:row.distance,
+    totalTime:row.total_time, splits:row.splits, strokeRate:row.stroke_rate, strokeLength:row.stroke_length,
+    breath:row.breath, vjump:row.vjump, ljump:row.ljump, gripL:row.grip_l, gripR:row.grip_r,
+    flex:row.flex, note:row.note };
+}
+
+function showToast(msg, isError){
+  const wrap = document.getElementById('toastWrap');
+  const t = document.createElement('div');
+  t.className = 'toast'+(isError?' error':'');
+  t.textContent = msg;
+  wrap.appendChild(t);
+  setTimeout(()=>{ t.remove(); }, 2600);
+}
+
+function showConfirm(message){
+  return new Promise(resolve=>{
+    const overlay = document.getElementById('modalOverlay');
+    document.getElementById('modalMessage').textContent = message;
+    overlay.classList.add('show');
+    const cancelBtn = document.getElementById('modalCancelBtn');
+    const okBtn = document.getElementById('modalConfirmBtn');
+    function cleanup(result){
+      overlay.classList.remove('show');
+      cancelBtn.removeEventListener('click', onCancel);
+      okBtn.removeEventListener('click', onOk);
+      resolve(result);
+    }
+    function onCancel(){ cleanup(false); }
+    function onOk(){ cleanup(true); }
+    cancelBtn.addEventListener('click', onCancel);
+    okBtn.addEventListener('click', onOk);
+  });
+}
+
+
+function updateMainView(){
+  const prompt = document.getElementById('selectAthletePrompt');
+  const switcher = document.getElementById('moduleSwitcher');
+  const resistanceModule = document.getElementById('resistanceModule');
+  const testModule = document.getElementById('testModule');
+  const managementActive = document.getElementById('panel-athletes').classList.contains('active');
+  if(managementActive){
+    prompt.style.display = 'none';
+    switcher.style.display = 'none';
+    resistanceModule.style.display = 'none';
+    testModule.style.display = 'none';
+    return;
+  }
+  if(currentAthleteId){
+    prompt.style.display = 'none';
+    switcher.style.display = 'flex';
+    resistanceModule.style.display = currentModule==='resistance' ? 'block' : 'none';
+    testModule.style.display = currentModule==='test' ? 'block' : 'none';
+  } else {
+    prompt.style.display = 'block';
+    switcher.style.display = 'none';
+    resistanceModule.style.display = 'none';
+    testModule.style.display = 'none';
+    document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  }
+}
+
+function switchModule(name){
+  currentModule = name;
+  document.querySelectorAll('#moduleSwitcher .module-btn').forEach(b=>b.classList.toggle('active', b.dataset.module===name));
+  goToTab(name==='test' ? lastTestTab : lastMainTab);
+}
+
+async function loadAll(){
+  try{
+    const { athletes: rows } = await apiFetch('/athletes');
+    athletes = rows;
+  }catch(e){ athletes = []; showToast('載入選手清單失敗：'+e.message, true); }
+  sessionsMap = {};
+  testsMap = {};
+  await Promise.all(athletes.map(async a=>{
+    try{
+      const { sessions } = await apiFetch(`/athletes/${a.id}/sessions`);
+      sessionsMap[a.id] = sessions.map(mapSessionFromApi);
+    }catch(e){ sessionsMap[a.id] = []; }
+    try{
+      const { tests } = await apiFetch(`/athletes/${a.id}/tests`);
+      testsMap[a.id] = tests.map(mapTestFromApi);
+    }catch(e){ testsMap[a.id] = []; }
+  }));
+  if(athletes.length && !currentAthleteId) currentAthleteId = athletes[0].id;
+  renderAthleteList();
+  renderEntryPanel();
+  renderHistory();
+  renderAnalysis();
+  renderAthleteManagement();
+  renderTestEntryPanel();
+  renderTestHistory();
+  updateMainView();
+}
+
+async function addAthlete(){
+  const name = document.getElementById('newAthleteName').value.trim();
+  const gender = document.getElementById('newAthleteGender').value;
+  if(!name){ return; }
+  try{
+    const { athlete } = await apiFetch('/athletes', { method:'POST', body: JSON.stringify({ name, gender }) });
+    athletes.push(athlete);
+    sessionsMap[athlete.id] = [];
+    testsMap[athlete.id] = [];
+    currentAthleteId = athlete.id;
+    document.getElementById('newAthleteName').value='';
+    renderAthleteList(); renderEntryPanel(); renderHistory(); renderAnalysis(); renderAthleteManagement();
+    updateMainView();
+    showToast('已新增選手：'+name);
+  }catch(e){ showToast(e.message, true); }
+}
+
+async function deleteAthlete(id, evt){
+  id = Number(id);
+  evt.stopPropagation();
+  const ok = await showConfirm('確定要刪除此選手與其所有測試紀錄嗎？此操作無法復原。');
+  if(!ok) return;
+  try{
+    await apiFetch(`/athletes/${id}`, { method:'DELETE' });
+    athletes = athletes.filter(a=>a.id!==id);
+    delete sessionsMap[id];
+    delete testsMap[id];
+    if(currentAthleteId===id) currentAthleteId = athletes.length? athletes[0].id : null;
+    renderAthleteList(); renderEntryPanel(); renderHistory(); renderAnalysis(); renderAthleteManagement();
+    updateMainView();
+    showToast('已刪除選手');
+  }catch(e){ showToast(e.message, true); }
+}
+
+function selectAthlete(id){
+  currentAthleteId = id;
+  renderAthleteList(); renderEntryPanel(); renderHistory();
+  goToTab(currentModule==='test' ? (lastTestTab || 'test-entry') : (lastMainTab || 'entry'));
+}
+
+let lastMainTab = 'entry';
+let lastTestTab = 'test-entry';
+
+function goToTab(name){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  const pill = document.querySelector(`.tab[data-tab="${name}"]`);
+  if(pill) pill.classList.add('active');
+  document.getElementById('panel-'+name).classList.add('active');
+  if(name.startsWith('test-')) lastTestTab = name;
+  else if(name!=='athletes') lastMainTab = name;
+  if(name==='athletes'){ renderAthleteManagement(); renderTeamHistory(); renderTeamAnalysis(); renderTeamTestHistory(); renderTeamTestAnalysis(); }
+  if(name==='analysis') renderAnalysis();
+  if(name==='report') renderCoachReport();
+  if(name==='test-entry') renderTestEntryPanel();
+  if(name==='test-history') renderTestHistory();
+  if(name==='test-analysis') renderTestAnalysis();
+  updateMainView();
+}
+
+function toggleCustomEvent(prefix){
+  const sel = document.getElementById(prefix+'_event');
+  const wrap = document.getElementById(prefix+'_event_custom_wrap');
+  if(!sel || !wrap) return;
+  wrap.style.display = sel.value==='其他' ? 'block' : 'none';
+}
+function getEventValue(prefix){
+  const sel = document.getElementById(prefix+'_event');
+  if(sel.value==='其他'){
+    const custom = document.getElementById(prefix+'_event_custom').value.trim();
+    return custom || '其他';
+  }
+  return sel.value;
+}
+function setEventValue(prefix, value){
+  const sel = document.getElementById(prefix+'_event');
+  const wrap = document.getElementById(prefix+'_event_custom_wrap');
+  const custom = document.getElementById(prefix+'_event_custom');
+  const known = ['自由式','蛙式','仰式','蝶式','混合式'];
+  if(known.includes(value)){
+    sel.value = value; wrap.style.display='none'; custom.value='';
+  } else if(value){
+    sel.value = '其他'; wrap.style.display='block'; custom.value = value;
+  } else {
+    sel.value = '自由式'; wrap.style.display='none'; custom.value='';
+  }
+}
+
+async function addAthleteFull(){
+  const name = document.getElementById('am_name').value.trim();
+  const gender = document.getElementById('am_gender').value;
+  const event = getEventValue('am');
+  const height = document.getElementById('am_height').value ? parseFloat(document.getElementById('am_height').value) : null;
+  const weight = document.getElementById('am_weight').value ? parseFloat(document.getElementById('am_weight').value) : null;
+  const age = document.getElementById('am_age').value ? parseInt(document.getElementById('am_age').value) : null;
+  const note = document.getElementById('am_note').value.trim();
+  if(!name){ showToast('請輸入選手姓名', true); return; }
+  try{
+    const { athlete } = await apiFetch('/athletes', {
+      method:'POST',
+      body: JSON.stringify({ name, gender, event, height, weight, age, note })
+    });
+    athletes.push(athlete);
+    sessionsMap[athlete.id] = [];
+    testsMap[athlete.id] = [];
+    currentAthleteId = athlete.id;
+    document.getElementById('am_name').value='';
+    document.getElementById('am_height').value='';
+    document.getElementById('am_weight').value='';
+    document.getElementById('am_age').value='';
+    document.getElementById('am_note').value='';
+    setEventValue('am', '自由式');
+    renderAthleteList(); renderEntryPanel(); renderHistory(); renderAnalysis(); renderAthleteManagement();
+    updateMainView();
+    showToast('已新增選手：'+name);
+  }catch(e){ showToast(e.message, true); }
+}
+
+let editingAthleteId = null;
+function openEditAthleteModal(id){
+  id = Number(id);
+  const a = athletes.find(x=>x.id===id);
+  if(!a) return;
+  editingAthleteId = id;
+  document.getElementById('edit_name').value = a.name || '';
+  document.getElementById('edit_gender').value = a.gender==='F' ? 'F' : 'M';
+  setEventValue('edit', a.event || '');
+  document.getElementById('edit_height').value = a.height!=null ? a.height : '';
+  document.getElementById('edit_weight').value = a.weight!=null ? a.weight : '';
+  document.getElementById('edit_age').value = a.age!=null ? a.age : '';
+  document.getElementById('edit_note').value = a.note || '';
+  document.getElementById('editModalOverlay').classList.add('show');
+}
+function closeEditModal(){
+  editingAthleteId = null;
+  document.getElementById('editModalOverlay').classList.remove('show');
+}
+async function saveEditAthlete(){
+  if(!editingAthleteId) return;
+  const a = athletes.find(x=>x.id===editingAthleteId);
+  if(!a) return;
+  const name = document.getElementById('edit_name').value.trim();
+  if(!name){ showToast('姓名不可為空', true); return; }
+  const body = {
+    name,
+    gender: document.getElementById('edit_gender').value,
+    event: getEventValue('edit'),
+    height: document.getElementById('edit_height').value ? parseFloat(document.getElementById('edit_height').value) : null,
+    weight: document.getElementById('edit_weight').value ? parseFloat(document.getElementById('edit_weight').value) : null,
+    age: document.getElementById('edit_age').value ? parseInt(document.getElementById('edit_age').value) : null,
+    note: document.getElementById('edit_note').value.trim()
+  };
+  try{
+    const { athlete } = await apiFetch(`/athletes/${editingAthleteId}`, { method:'PUT', body: JSON.stringify(body) });
+    Object.assign(a, athlete);
+    closeEditModal();
+    renderAthleteList(); renderEntryPanel(); renderHistory(); renderAnalysis(); renderAthleteManagement();
+    showToast('已更新選手資料');
+  }catch(e){ showToast(e.message, true); }
+}
+
+function renderAthleteManagement(){
+  const stripEl = document.getElementById('athleteStatStrip');
+  const totalSessions = Object.values(sessionsMap).reduce((sum,arr)=>sum+arr.length,0);
+  const mCount = athletes.filter(a=>a.gender==='M').length;
+  const fCount = athletes.filter(a=>a.gender==='F').length;
+  if(stripEl){
+    stripEl.innerHTML = `
+      <div class="stat"><div class="v">${athletes.length}</div><div class="l">選手總數</div></div>
+      <div class="stat"><div class="v">${mCount}</div><div class="l">男性</div></div>
+      <div class="stat"><div class="v">${fCount}</div><div class="l">女性</div></div>
+      <div class="stat"><div class="v">${totalSessions}</div><div class="l">總測試筆數</div></div>
+    `;
+  }
+
+  const searchEl = document.getElementById('am_search');
+  const genderFilterEl = document.getElementById('am_genderFilter');
+  if(!searchEl || !genderFilterEl) return;
+  const search = searchEl.value.trim().toLowerCase();
+  const genderFilter = genderFilterEl.value;
+
+  let rows = athletes.slice();
+  if(search) rows = rows.filter(a=>a.name.toLowerCase().includes(search));
+  if(genderFilter!=='all') rows = rows.filter(a=>a.gender===genderFilter);
+
+  const body = document.getElementById('athleteMgmtBody');
+  const empty = document.getElementById('athleteMgmtEmpty');
+  body.innerHTML = '';
+  empty.style.display = rows.length ? 'none' : 'block';
+
+  rows.forEach(a=>{
+    const sess = (sessionsMap[a.id]||[]).slice().sort((x,y)=>(x.date||'').localeCompare(y.date||''));
+    const last = sess[sess.length-1];
+    const genderLabel = a.gender==='F' ? '女' : '男';
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${escapeHtml(a.name)}</td>
+      <td>${genderLabel}</td>
+      <td>${escapeHtml(a.event||'—')}</td>
+      <td class="num">${a.height!=null && a.height!=='' ? a.height+'cm' : '—'}</td>
+      <td class="num">${a.weight!=null && a.weight!=='' ? a.weight+'kg' : '—'}</td>
+      <td class="num">${a.age!=null && a.age!=='' ? a.age : '—'}</td>
+      <td class="num">${sess.length}</td>
+      <td class="num">${last? last.date : '—'}</td>
+      <td class="num">${last && last.peak!=null ? last.peak : '—'}</td>
+      <td style="max-width:160px; white-space:normal; text-align:left;">${escapeHtml(a.note||'—')}</td>
+      <td class="row-actions">
+        <button class="btn btn-outline btn-sm" onclick="openEditAthleteModal('${a.id}')">編輯</button>
+        <button class="btn btn-ghost btn-sm" onclick="deleteAthlete('${a.id}', event)">刪除</button>
+      </td>
+    `;
+    body.appendChild(tr);
+  });
+}
+
+function renderAthleteList(){
+  const wrap = document.getElementById('athleteList');
+  wrap.innerHTML = '';
+  athletes.forEach(a=>{
+    const div = document.createElement('div');
+    div.className = 'athlete-item'+(a.id===currentAthleteId?' active':'');
+    div.onclick = ()=>selectAthlete(a.id);
+    const count = (sessionsMap[a.id]||[]).length;
+    const genderLabel = a.gender==='F' ? '女' : a.gender==='M' ? '男' : '—';
+    div.innerHTML = `<span>${escapeHtml(a.name)} <span style="color:#7C8FA6;font-family:var(--mono);font-size:11px;">(${genderLabel}·${count})</span></span><span class="del" onclick="deleteAthlete('${a.id}', event)">✕</span>`;
+    wrap.appendChild(div);
+  });
+  document.getElementById('athleteCount').textContent = athletes.length;
+  let total=0; Object.values(sessionsMap).forEach(arr=>total+=arr.length);
+  document.getElementById('sessionCount').textContent = total;
+
+  // populate filters
+  const analysisSel = document.getElementById('analysisAthleteSel');
+  const teamFilt = document.getElementById('teamAthleteFilter');
+  const normSel = document.getElementById('normAthleteSel');
+  const teamTestFilt = document.getElementById('teamTestAthleteFilter');
+  const prevAnalysis = analysisSel.value;
+  const prevTeamFilt = teamFilt ? teamFilt.value : null;
+  const prevNormSel = normSel ? normSel.value : null;
+  const prevTeamTestFilt = teamTestFilt ? teamTestFilt.value : null;
+  analysisSel.innerHTML = athletes.map(a=>`<option value="${a.id}">${escapeHtml(a.name)}</option>`).join('');
+  if(teamFilt) teamFilt.innerHTML = '<option value="all">全部選手</option>' + athletes.map(a=>`<option value="${a.id}">${escapeHtml(a.name)}</option>`).join('');
+  if(normSel) normSel.innerHTML = athletes.map(a=>`<option value="${a.id}">${escapeHtml(a.name)}</option>`).join('');
+  if(teamTestFilt) teamTestFilt.innerHTML = '<option value="all">全部選手</option>' + athletes.map(a=>`<option value="${a.id}">${escapeHtml(a.name)}</option>`).join('');
+  if(athletes.some(a=>a.id===prevAnalysis)) analysisSel.value = prevAnalysis;
+  else if(currentAthleteId) analysisSel.value = currentAthleteId;
+  if(teamFilt && athletes.some(a=>a.id===prevTeamFilt)) teamFilt.value = prevTeamFilt;
+  if(normSel && athletes.some(a=>a.id===prevNormSel)) normSel.value = prevNormSel;
+  else if(normSel && currentAthleteId) normSel.value = currentAthleteId;
+  if(teamTestFilt && athletes.some(a=>a.id===prevTeamTestFilt)) teamTestFilt.value = prevTeamTestFilt;
+}
+
+function renderEntryPanel(){
+  const wrap = document.getElementById('entryFormWrap');
+  const warn = document.getElementById('noAthleteEntryWarning');
+  if(!currentAthleteId){ wrap.style.display='none'; warn.style.display='block'; return; }
+  wrap.style.display='block'; warn.style.display='none';
+  const a = athletes.find(x=>x.id===currentAthleteId);
+  document.getElementById('currentAthleteTag').textContent = a? ('目前選手：'+a.name) : '';
+  document.getElementById('f_date').value = new Date().toISOString().slice(0,10);
+}
+
+async function saveSession(){
+  if(!currentAthleteId){ showToast('請先選擇選手', true); return; }
+  const val = id => { const v = document.getElementById(id).value; return v===''? null : parseFloat(v); };
+  const peak = val('f_peak'), avg = val('f_avg');
+  let ratio = val('f_ratio');
+  if(ratio===null && peak && avg!==null && peak!==0) ratio = Math.round((avg/peak*100)*10)/10;
+  const body = {
+    date: document.getElementById('f_date').value || new Date().toISOString().slice(0,10),
+    type: document.getElementById('f_type').value,
+    side: document.getElementById('f_side').value,
+    resistance: document.getElementById('f_resistance').value,
+    peak, avg, ratio,
+    reps: val('f_reps'),
+    maxSpeed: val('f_maxspeed'),
+    avgSpeed: val('f_avgspeed'),
+    accel: val('f_accel'),
+    dist: val('f_dist'),
+    totMaxSpeed: val('f_totmaxspeed'),
+    totDist: val('f_totdist'),
+    note: document.getElementById('f_note').value
+  };
+  try{
+    const { session } = await apiFetch(`/athletes/${currentAthleteId}/sessions`, { method:'POST', body: JSON.stringify(body) });
+    sessionsMap[currentAthleteId] = sessionsMap[currentAthleteId] || [];
+    sessionsMap[currentAthleteId].push(mapSessionFromApi(session));
+    sessionsMap[currentAthleteId].sort((x,y)=> (x.date||'').localeCompare(y.date||''));
+    ['f_resistance','f_peak','f_avg','f_ratio','f_reps','f_maxspeed','f_avgspeed','f_accel','f_dist','f_totmaxspeed','f_totdist','f_note'].forEach(id=>document.getElementById(id).value='');
+    renderAthleteList(); renderHistory(); renderAnalysis();
+    showToast('已儲存測試紀錄');
+  }catch(e){ showToast(e.message, true); }
+}
+
+function allSessionsFlat(){
+  const out = [];
+  athletes.forEach(a=>{
+    (sessionsMap[a.id]||[]).forEach(s=> out.push(Object.assign({athleteName:a.name, athleteId:a.id}, s)));
+  });
+  return out.sort((x,y)=> (y.date||'').localeCompare(x.date||''));
+}
+
+function typeBadge(t){
+  const cls = t==='拉'?'badge-pull': t==='踢'?'badge-kick': t==='全泳'?'badge-full':'badge-other';
+  return `<span class="badge ${cls}">${t||'其他'}</span>`;
+}
+
+function sideLabel(s){
+  if(s==='左') return '左手';
+  if(s==='右') return '右手';
+  return '雙手';
+}
+
+function renderHistory(){
+  const typeFilter = document.getElementById('eventTypeSel').value || 'all';
+  const tagEl = document.getElementById('historyAthleteTag');
+  const currentAthlete = athletes.find(a=>a.id===currentAthleteId);
+  if(tagEl) tagEl.textContent = currentAthlete ? ('目前選手：'+currentAthlete.name) : '';
+
+  let rows = currentAthleteId ? (sessionsMap[currentAthleteId]||[]).slice() : [];
+  if(typeFilter!=='all') rows = rows.filter(r=>r.type===typeFilter);
+  rows.sort((x,y)=>(y.date||'').localeCompare(x.date||''));
+
+  const body = document.getElementById('historyBody');
+  const empty = document.getElementById('historyEmpty');
+  body.innerHTML = '';
+  if(!currentAthleteId){
+    empty.textContent = '請先於左側選擇一位選手';
+    empty.style.display='block';
+  } else if(rows.length===0){
+    empty.textContent = '尚無測試紀錄，請至「新增測試」頁籤輸入';
+    empty.style.display='block';
+  } else{ empty.style.display='none'; }
+
+  rows.forEach(r=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${r.date||''}</td>
+      <td>${typeBadge(r.type)}</td>
+      <td>${sideLabel(r.side)}</td>
+      <td class="num">${r.resistance||'—'}</td>
+      <td class="num">${fmt(r.peak)}</td>
+      <td class="num">${fmt(r.avg)}</td>
+      <td class="num">${fmt(r.ratio)}</td>
+      <td class="num">${fmt(r.reps)}</td>
+      <td class="num">${fmt(r.maxSpeed)}</td>
+      <td class="num">${fmt(r.avgSpeed)}</td>
+      <td class="num">${fmt(r.accel)}</td>
+      <td class="num">${fmt(r.dist)}</td>
+      <td class="num">${fmt(r.totMaxSpeed)}</td>
+      <td class="num">${fmt(r.totDist)}</td>
+      <td class="row-actions"><button class="btn btn-ghost btn-sm" onclick="deleteSession('${currentAthleteId}','${r.id}')">刪除</button></td>
+    `;
+    body.appendChild(tr);
+  });
+
+  // stat strip: aggregate for filtered set
+  const strip = document.getElementById('statStrip');
+  if(rows.length===0){ strip.innerHTML=''; return; }
+  const avgOf = key => { const v = rows.map(r=>r[key]).filter(x=>x!==null && x!==undefined); return v.length? (v.reduce((a,b)=>a+b,0)/v.length).toFixed(1) : '—'; };
+  strip.innerHTML = `
+    <div class="stat"><div class="v">${rows.length}</div><div class="l">符合筆數</div></div>
+    <div class="stat"><div class="v">${avgOf('peak')}</div><div class="l">平均峰值功率 W</div></div>
+    <div class="stat"><div class="v">${avgOf('avg')}</div><div class="l">平均功率 W</div></div>
+    <div class="stat"><div class="v">${avgOf('ratio')}</div><div class="l">平均占比 %</div></div>
+    <div class="stat"><div class="v">${avgOf('maxSpeed')}</div><div class="l">平均最大速度 m/s</div></div>
+  `;
+}
+
+function renderTeamHistory(){
+  const athleteFilterEl = document.getElementById('teamAthleteFilter');
+  const typeFilterEl = document.getElementById('teamTypeFilter');
+  if(!athleteFilterEl || !typeFilterEl) return;
+  const athleteFilter = athleteFilterEl.value || 'all';
+  const typeFilter = typeFilterEl.value || 'all';
+  let rows = allSessionsFlat();
+  if(athleteFilter!=='all') rows = rows.filter(r=>r.athleteId===athleteFilter);
+  if(typeFilter!=='all') rows = rows.filter(r=>r.type===typeFilter);
+
+  const body = document.getElementById('teamHistoryBody');
+  const empty = document.getElementById('teamHistoryEmpty');
+  body.innerHTML = '';
+  empty.style.display = rows.length===0 ? 'block' : 'none';
+
+  rows.forEach(r=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${r.date||''}</td>
+      <td>${escapeHtml(r.athleteName)}</td>
+      <td>${typeBadge(r.type)}</td>
+      <td>${sideLabel(r.side)}</td>
+      <td class="num">${r.resistance||'—'}</td>
+      <td class="num">${fmt(r.peak)}</td>
+      <td class="num">${fmt(r.avg)}</td>
+      <td class="num">${fmt(r.ratio)}</td>
+      <td class="num">${fmt(r.reps)}</td>
+      <td class="num">${fmt(r.maxSpeed)}</td>
+      <td class="num">${fmt(r.avgSpeed)}</td>
+      <td class="num">${fmt(r.accel)}</td>
+      <td class="num">${fmt(r.dist)}</td>
+      <td class="num">${fmt(r.totMaxSpeed)}</td>
+      <td class="num">${fmt(r.totDist)}</td>
+    `;
+    body.appendChild(tr);
+  });
+
+  const strip = document.getElementById('teamStatStrip');
+  if(rows.length===0){ strip.innerHTML=''; return; }
+  const avgOf = key => { const v = rows.map(r=>r[key]).filter(x=>x!==null && x!==undefined); return v.length? (v.reduce((a,b)=>a+b,0)/v.length).toFixed(1) : '—'; };
+  strip.innerHTML = `
+    <div class="stat"><div class="v">${rows.length}</div><div class="l">符合筆數</div></div>
+    <div class="stat"><div class="v">${avgOf('peak')}</div><div class="l">平均峰值功率 W</div></div>
+    <div class="stat"><div class="v">${avgOf('avg')}</div><div class="l">平均功率 W</div></div>
+    <div class="stat"><div class="v">${avgOf('ratio')}</div><div class="l">平均占比 %</div></div>
+    <div class="stat"><div class="v">${avgOf('maxSpeed')}</div><div class="l">平均最大速度 m/s</div></div>
+  `;
+}
+
+async function deleteSession(athleteId, sessionId){
+  athleteId = Number(athleteId); sessionId = Number(sessionId);
+  const confirmed = await showConfirm('確定刪除這筆測試紀錄？');
+  if(!confirmed) return;
+  try{
+    await apiFetch(`/athletes/${athleteId}/sessions/${sessionId}`, { method:'DELETE' });
+    sessionsMap[athleteId] = (sessionsMap[athleteId]||[]).filter(s=>s.id!==sessionId);
+    renderAthleteList(); renderHistory(); renderAnalysis();
+    showToast('已刪除該筆紀錄');
+  }catch(e){ showToast(e.message, true); }
+}
+
+function fmt(v){ return (v===null||v===undefined||isNaN(v)) ? '—' : v; }
+function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+function destroyChart(key){ if(charts[key]){ charts[key].destroy(); delete charts[key]; } }
+
+function mean(arr){ return arr.length? arr.reduce((a,b)=>a+b,0)/arr.length : NaN; }
+function stddev(arr){
+  if(arr.length<2) return NaN;
+  const m = mean(arr);
+  const v = arr.reduce((a,b)=>a+(b-m)*(b-m),0)/(arr.length-1);
+  return Math.sqrt(v);
+}
+function normalPdf(x, m, sd){
+  if(!sd || sd<=0) return 0;
+  return (1/(sd*Math.sqrt(2*Math.PI))) * Math.exp(-0.5*Math.pow((x-m)/sd,2));
+}
+function erf(x){
+  // Abramowitz-Stegun approximation
+  const sign = x<0? -1:1; x = Math.abs(x);
+  const a1=0.254829592,a2=-0.284496736,a3=1.421413741,a4=-1.453152027,a5=1.061405429,p=0.3275911;
+  const t = 1/(1+p*x);
+  const y = 1 - (((((a5*t+a4)*t)+a3)*t+a2)*t+a1)*t*Math.exp(-x*x);
+  return sign*y;
+}
+function normalCdf(x, m, sd){
+  if(!sd || sd<=0) return NaN;
+  return 0.5*(1+erf((x-m)/(sd*Math.sqrt(2))));
+}
+
+function renderAnalysis(){
+  const sel = document.getElementById('analysisAthleteSel');
+  const athleteId = sel.value || (athletes[0] && athletes[0].id);
+  const sessions = (sessionsMap[athleteId]||[]).slice().sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+  const labels = sessions.map(s=>s.date);
+
+  destroyChart('power');
+  charts.power = new Chart(document.getElementById('chartPower'), {
+    type:'line',
+    data:{ labels, datasets:[
+      { label:'峰值功率 (W)', data: sessions.map(s=>s.peak), borderColor:'#1F9E8E', backgroundColor:'rgba(31,158,142,0.1)', tension:.3 },
+      { label:'平均功率 (W)', data: sessions.map(s=>s.avg), borderColor:'#F2994A', backgroundColor:'rgba(242,153,74,0.1)', tension:.3 }
+    ]},
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}} }
+  });
+
+  destroyChart('ratio');
+  charts.ratio = new Chart(document.getElementById('chartRatio'), {
+    type:'line',
+    data:{ labels, datasets:[
+      { label:'占比 %（平均/峰值）', data: sessions.map(s=>s.ratio), borderColor:'#C0392B', backgroundColor:'rgba(192,57,43,0.1)', tension:.3, fill:true }
+    ]},
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}} }
+  });
+
+  destroyChart('speed');
+  charts.speed = new Chart(document.getElementById('chartSpeed'), {
+    type:'line',
+    data:{ labels, datasets:[
+      { label:'最大速度 (m/s)', data: sessions.map(s=>s.maxSpeed), borderColor:'#1F9E8E', tension:.3 },
+      { label:'平均速度 (m/s)', data: sessions.map(s=>s.avgSpeed), borderColor:'#F2994A', tension:.3 },
+      { label:'總最大速度 (m/s)', data: sessions.map(s=>s.totMaxSpeed), borderColor:'#5B4FBF', tension:.3 }
+    ]},
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}} }
+  });
+
+  destroyChart('volume');
+  charts.volume = new Chart(document.getElementById('chartVolume'), {
+    type:'bar',
+    data:{ labels, datasets:[
+      { label:'距離 (m)', data: sessions.map(s=>s.dist), backgroundColor:'#F2994A' },
+      { label:'次數', data: sessions.map(s=>s.reps), backgroundColor:'#1F9E8E' }
+    ]},
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}} }
+  });
+
+  renderPBCard(athleteId, sessions);
+  renderBalanceChart(athleteId, sessions);
+
+  // radar: selected athlete latest vs team avg, normalized
+  const metrics = ['peak','avg','maxSpeed','avgSpeed','dist','reps'];
+  const metricLabels = ['峰值功率','平均功率','最大速度','平均速度','距離','次數'];
+  const teamAvg = {};
+  metrics.forEach(m=>{
+    const vals = athletes.flatMap(a=>{
+      const arr=(sessionsMap[a.id]||[]);
+      const last = arr[arr.length-1];
+      return last && last[m]!=null ? [last[m]] : [];
+    });
+    teamAvg[m] = vals.length? vals.reduce((a,b)=>a+b,0)/vals.length : 0;
+  });
+  const selArr = (sessionsMap[athleteId]||[]);
+  const selLast = selArr[selArr.length-1] || {};
+  const normSelf = metrics.map(m=> teamAvg[m]? Math.round((selLast[m]||0)/teamAvg[m]*100) : 0);
+  const normTeam = metrics.map(()=>100);
+
+  destroyChart('radar');
+  charts.radar = new Chart(document.getElementById('chartRadar'), {
+    type:'radar',
+    data:{ labels: metricLabels, datasets:[
+      { label:'選手（相對全隊%）', data: normSelf, borderColor:'#1F9E8E', backgroundColor:'rgba(31,158,142,0.2)' },
+      { label:'全隊平均基準', data: normTeam, borderColor:'#C0392B', backgroundColor:'rgba(192,57,43,0.08)' }
+    ]},
+    options:{ responsive:true, maintainAspectRatio:false, scales:{ r:{ beginAtZero:true } }, plugins:{legend:{position:'bottom'}} }
+  });
+}
+
+function renderPBCard(athleteId, sessions){
+  const strip = document.getElementById('pbStrip');
+  if(!strip) return;
+  if(!sessions.length){ strip.innerHTML = '<div class="hint">尚無測試紀錄</div>'; return; }
+  const bestOf = (key, better) => {
+    let best = null;
+    sessions.forEach(s=>{
+      if(s[key]==null) return;
+      if(best===null || (better==='max' ? s[key]>best.val : s[key]<best.val)) best = { val:s[key], date:s.date };
+    });
+    return best;
+  };
+  const items = [
+    ['峰值功率 W', bestOf('peak','max')],
+    ['平均功率 W', bestOf('avg','max')],
+    ['最大速度 m/s', bestOf('maxSpeed','max')],
+    ['平均速度 m/s', bestOf('avgSpeed','max')],
+    ['單次距離 m', bestOf('dist','max')],
+    ['訓練次數', bestOf('reps','max')]
+  ];
+  strip.innerHTML = items.map(([label,best])=>`
+    <div class="stat">
+      <div class="v">${best ? best.val : '—'}</div>
+      <div class="l">${label}${best? ' · '+best.date : ''}</div>
+    </div>
+  `).join('');
+}
+
+function renderBalanceChart(athleteId, sessions){
+  const canvas = document.getElementById('chartBalance');
+  if(!canvas) return;
+  const leftSessions = sessions.filter(s=>s.side==='左');
+  const rightSessions = sessions.filter(s=>s.side==='右');
+  const lastLeft = leftSessions[leftSessions.length-1];
+  const lastRight = rightSessions[rightSessions.length-1];
+  const statsEl = document.getElementById('balanceStats');
+
+  destroyChart('balance');
+  if(!lastLeft || !lastRight){
+    canvas.getContext('2d').clearRect(0,0,9999,9999);
+    if(statsEl) statsEl.innerHTML = '需要同時有「左手」與「右手」的測試紀錄才能比較平衡性，目前資料不足。';
+    return;
+  }
+  const metrics = ['peak','avg','maxSpeed','avgSpeed'];
+  const metricLabels = ['峰值功率','平均功率','最大速度','平均速度'];
+  charts.balance = new Chart(canvas, {
+    type:'bar',
+    data:{ labels: metricLabels, datasets:[
+      { label:'左手 ('+lastLeft.date+')', data: metrics.map(m=>lastLeft[m]), backgroundColor:'#1F9E8E' },
+      { label:'右手 ('+lastRight.date+')', data: metrics.map(m=>lastRight[m]), backgroundColor:'#F2994A' }
+    ]},
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}} }
+  });
+
+  if(statsEl){
+    const lines = metrics.map((m,i)=>{
+      const l = lastLeft[m], r = lastRight[m];
+      if(l==null || r==null || (l+r)===0) return `${metricLabels[i]}：資料不足`;
+      const diff = ((l-r)/((l+r)/2)*100);
+      const strongerSide = diff>0 ? '左' : diff<0 ? '右' : '';
+      return `${metricLabels[i]}：左 ${l} / 右 ${r}（${strongerSide?strongerSide+'側較強，':''}差異 ${Math.abs(diff).toFixed(1)}%）`;
+    });
+    statsEl.innerHTML = lines.join(' ｜ ');
+  }
+}
+
+function renderCoachReport(){
+  const genEl = document.getElementById('reportGeneratedAt');
+  const a = athletes.find(x=>x.id===currentAthleteId);
+  if(!a){
+    if(genEl) genEl.textContent = '請先選擇一位選手';
+    ['reportProfileStrip','reportPBStrip','reportRecentBody'].forEach(id=>{ const el=document.getElementById(id); if(el) el.innerHTML=''; });
+    return;
+  }
+  const sessions = (sessionsMap[a.id]||[]).slice().sort((x,y)=>(x.date||'').localeCompare(y.date||''));
+  if(genEl) genEl.textContent = a.name + ' · 報表產生時間：' + new Date().toLocaleString('zh-TW');
+
+  const profileStrip = document.getElementById('reportProfileStrip');
+  profileStrip.innerHTML = `
+    <div class="stat"><div class="v">${escapeHtml(a.name)}</div><div class="l">姓名</div></div>
+    <div class="stat"><div class="v">${a.gender==='F'?'女':'男'}</div><div class="l">性別</div></div>
+    <div class="stat"><div class="v">${escapeHtml(a.event||'—')}</div><div class="l">專項</div></div>
+    <div class="stat"><div class="v">${a.height!=null?a.height:'—'}</div><div class="l">身高 cm</div></div>
+    <div class="stat"><div class="v">${a.weight!=null?a.weight:'—'}</div><div class="l">體重 kg</div></div>
+    <div class="stat"><div class="v">${a.age!=null?a.age:'—'}</div><div class="l">年齡</div></div>
+  `;
+
+  const pbStrip = document.getElementById('reportPBStrip');
+  if(!sessions.length){
+    pbStrip.innerHTML = '<div class="hint">尚無測試紀錄</div>';
+  } else {
+    const bestOf = (key) => { let best=null; sessions.forEach(s=>{ if(s[key]==null) return; if(best===null||s[key]>best.val) best={val:s[key],date:s.date}; }); return best; };
+    const items = [['峰值功率 W', bestOf('peak')], ['平均功率 W', bestOf('avg')], ['最大速度 m/s', bestOf('maxSpeed')], ['單次距離 m', bestOf('dist')]];
+    pbStrip.innerHTML = items.map(([label,best])=>`<div class="stat"><div class="v">${best?best.val:'—'}</div><div class="l">${label}${best?' · '+best.date:''}</div></div>`).join('');
+  }
+
+  const recentBody = document.getElementById('reportRecentBody');
+  const recent = sessions.slice(-10).reverse();
+  recentBody.innerHTML = recent.map(r=>`
+    <tr>
+      <td>${r.date||''}</td>
+      <td>${typeBadge(r.type)}</td>
+      <td>${sideLabel(r.side)}</td>
+      <td class="num">${fmt(r.peak)}</td>
+      <td class="num">${fmt(r.avg)}</td>
+      <td class="num">${fmt(r.ratio)}</td>
+      <td class="num">${fmt(r.maxSpeed)}</td>
+      <td class="num">${fmt(r.avgSpeed)}</td>
+      <td class="num">${fmt(r.dist)}</td>
+    </tr>
+  `).join('') || '<tr><td colspan="9" style="text-align:center; color:var(--slate);">尚無測試紀錄</td></tr>';
+
+  const noteEl = document.getElementById('reportNote');
+  noteEl.textContent = a.note || '（無備註）';
+}
+
+/* ===== TEST MODULE (游泳教練檢測紀錄) ===== */
+
+function renderTestEntryPanel(){
+  const tagEl = document.getElementById('testCurrentAthleteTag');
+  const a = athletes.find(x=>x.id===currentAthleteId);
+  if(tagEl) tagEl.textContent = a ? ('目前選手：'+a.name) : '';
+  const dateEl = document.getElementById('t_date');
+  if(dateEl && !dateEl.value) dateEl.value = new Date().toISOString().slice(0,10);
+}
+
+async function saveTestRecord(){
+  if(!currentAthleteId){ showToast('請先選擇選手', true); return; }
+  const val = id => { const v = document.getElementById(id).value; return v===''? null : parseFloat(v); };
+  const txt = id => document.getElementById(id).value;
+  const body = {
+    date: txt('t_date') || new Date().toISOString().slice(0,10),
+    category: txt('t_category'),
+    stroke: txt('t_stroke'),
+    distance: txt('t_distance'),
+    totalTime: val('t_totaltime'),
+    splits: txt('t_splits'),
+    strokeRate: val('t_strokerate'),
+    strokeLength: val('t_strokelength'),
+    breath: txt('t_breath'),
+    vjump: val('t_vjump'),
+    ljump: val('t_ljump'),
+    gripL: val('t_gripL'),
+    gripR: val('t_gripR'),
+    flex: val('t_flex'),
+    note: txt('t_note')
+  };
+  try{
+    const { test } = await apiFetch(`/athletes/${currentAthleteId}/tests`, { method:'POST', body: JSON.stringify(body) });
+    testsMap[currentAthleteId] = testsMap[currentAthleteId] || [];
+    testsMap[currentAthleteId].push(mapTestFromApi(test));
+    testsMap[currentAthleteId].sort((x,y)=>(x.date||'').localeCompare(y.date||''));
+    ['t_totaltime','t_splits','t_strokerate','t_strokelength','t_breath','t_vjump','t_ljump','t_gripL','t_gripR','t_flex','t_note'].forEach(id=>document.getElementById(id).value='');
+    renderTestHistory();
+    showToast('已儲存檢測紀錄');
+  }catch(e){ showToast(e.message, true); }
+}
+
+async function deleteTestRecord(athleteId, testId){
+  athleteId = Number(athleteId); testId = Number(testId);
+  const confirmed = await showConfirm('確定刪除這筆檢測紀錄？');
+  if(!confirmed) return;
+  try{
+    await apiFetch(`/athletes/${athleteId}/tests/${testId}`, { method:'DELETE' });
+    testsMap[athleteId] = (testsMap[athleteId]||[]).filter(t=>t.id!==testId);
+    renderTestHistory();
+    showToast('已刪除該筆檢測紀錄');
+  }catch(e){ showToast(e.message, true); }
+}
+
+function categoryBadge(c){
+  const map = { '泳池計時':'badge-pull', '划頻划距':'badge-kick', '體能爆發力':'badge-full', '綜合':'badge-other' };
+  return `<span class="badge ${map[c]||'badge-other'}">${c||'其他'}</span>`;
+}
+
+function renderTestHistory(){
+  const tagEl = document.getElementById('testHistoryAthleteTag');
+  const a = athletes.find(x=>x.id===currentAthleteId);
+  if(tagEl) tagEl.textContent = a ? ('目前選手：'+a.name) : '';
+
+  const catFilterEl = document.getElementById('testCategoryFilter');
+  const catFilter = catFilterEl ? catFilterEl.value : 'all';
+  let rows = currentAthleteId ? (testsMap[currentAthleteId]||[]).slice() : [];
+  if(catFilter!=='all') rows = rows.filter(r=>r.category===catFilter);
+  rows.sort((x,y)=>(y.date||'').localeCompare(x.date||''));
+
+  const body = document.getElementById('testHistoryBody');
+  const empty = document.getElementById('testHistoryEmpty');
+  if(!body) return;
+  body.innerHTML = '';
+  empty.style.display = (!currentAthleteId || rows.length===0) ? 'block' : 'none';
+  empty.textContent = !currentAthleteId ? '請先於左側選擇一位選手' : '尚無檢測紀錄';
+
+  rows.forEach(r=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${r.date||''}</td>
+      <td>${categoryBadge(r.category)}</td>
+      <td>${escapeHtml(r.stroke||'—')}</td>
+      <td class="num">${r.distance? r.distance+'m' : '—'}</td>
+      <td class="num">${fmt(r.totalTime)}</td>
+      <td class="num">${fmt(r.strokeRate)}</td>
+      <td class="num">${fmt(r.strokeLength)}</td>
+      <td>${escapeHtml(r.breath||'—')}</td>
+      <td class="num">${fmt(r.vjump)}</td>
+      <td class="num">${fmt(r.ljump)}</td>
+      <td class="num">${(r.gripL!=null||r.gripR!=null) ? (fmt(r.gripL)+' / '+fmt(r.gripR)) : '—'}</td>
+      <td class="num">${fmt(r.flex)}</td>
+      <td class="row-actions"><button class="btn btn-ghost btn-sm" onclick="deleteTestRecord('${currentAthleteId}','${r.id}')">刪除</button></td>
+    `;
+    body.appendChild(tr);
+  });
+}
+
+function renderTestAnalysis(){
+  const athleteId = currentAthleteId;
+  const sessions = athleteId ? (testsMap[athleteId]||[]).slice().sort((a,b)=>(a.date||'').localeCompare(b.date||'')) : [];
+  const labels = sessions.map(s=>s.date);
+
+  // PB strip
+  const pbStrip = document.getElementById('testPBStrip');
+  if(pbStrip){
+    if(!sessions.length){
+      pbStrip.innerHTML = '<div class="hint">尚無檢測紀錄</div>';
+    } else {
+      const bestTime = (() => { let b=null; sessions.forEach(s=>{ if(s.totalTime==null) return; if(b===null||s.totalTime<b.val) b={val:s.totalTime,date:s.date,dist:s.distance}; }); return b; })();
+      const bestOf = (key,mode) => { let b=null; sessions.forEach(s=>{ if(s[key]==null) return; if(b===null||(mode==='max'?s[key]>b.val:s[key]<b.val)) b={val:s[key],date:s.date}; }); return b; };
+      const items = [
+        ['最佳計時 s'+(bestTime&&bestTime.dist?(' ('+bestTime.dist+'m)'):''), bestTime],
+        ['最佳垂直跳 cm', bestOf('vjump','max')],
+        ['最佳立定跳遠 cm', bestOf('ljump','max')],
+        ['最佳柔軟度 cm', bestOf('flex','max')]
+      ];
+      pbStrip.innerHTML = items.map(([label,best])=>`<div class="stat"><div class="v">${best?best.val:'—'}</div><div class="l">${label}${best?' · '+best.date:''}</div></div>`).join('');
+    }
+  }
+
+  destroyChart('poolTime');
+  if(document.getElementById('chartPoolTime')){
+    const palette = ['#C0392B','#1F9E8E','#F2994A','#5B4FBF','#0F1B2D','#8FA2B8'];
+    const timedSessions = sessions.filter(s=>s.totalTime!=null);
+    const distances = [...new Set(timedSessions.map(s=> s.distance || '未標示'))];
+    const poolDatasets = distances.map((d,i) => ({
+      label: d==='未標示' ? '未標示距離' : d+'m',
+      data: labels.map((date,idx) => (sessions[idx].totalTime!=null && (sessions[idx].distance || '未標示')===d) ? sessions[idx].totalTime : null),
+      borderColor: palette[i % palette.length],
+      backgroundColor: 'transparent',
+      spanGaps: true,
+      tension: .3
+    }));
+    charts.poolTime = new Chart(document.getElementById('chartPoolTime'), {
+      type:'line',
+      data:{ labels, datasets: poolDatasets },
+      options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}} }
+    });
+  }
+
+  destroyChart('stroke');
+  if(document.getElementById('chartStroke')){
+    charts.stroke = new Chart(document.getElementById('chartStroke'), {
+      type:'line',
+      data:{ labels, datasets:[
+        { label:'划頻 (次/分)', data: sessions.map(s=>s.strokeRate), borderColor:'#1F9E8E', tension:.3 },
+        { label:'划距 (m/次)', data: sessions.map(s=>s.strokeLength), borderColor:'#F2994A', tension:.3 }
+      ]},
+      options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}} }
+    });
+  }
+
+  destroyChart('fitness');
+  if(document.getElementById('chartFitness')){
+    charts.fitness = new Chart(document.getElementById('chartFitness'), {
+      type:'line',
+      data:{ labels, datasets:[
+        { label:'垂直跳 (cm)', data: sessions.map(s=>s.vjump), borderColor:'#1F9E8E', tension:.3 },
+        { label:'立定跳遠 (cm)', data: sessions.map(s=>s.ljump), borderColor:'#F2994A', tension:.3 },
+        { label:'柔軟度 (cm)', data: sessions.map(s=>s.flex), borderColor:'#5B4FBF', tension:.3 }
+      ]},
+      options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}} }
+    });
+  }
+
+  destroyChart('grip');
+  if(document.getElementById('chartGrip')){
+    const withGrip = sessions.filter(s=>s.gripL!=null || s.gripR!=null);
+    const last = withGrip[withGrip.length-1];
+    charts.grip = new Chart(document.getElementById('chartGrip'), {
+      type:'bar',
+      data:{ labels:['握力 (kg)'], datasets:[
+        { label:'左手', data:[last? last.gripL : null], backgroundColor:'#1F9E8E' },
+        { label:'右手', data:[last? last.gripR : null], backgroundColor:'#F2994A' }
+      ]},
+      options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}} }
+    });
+  }
+}
+
+function renderTeamAnalysis(){
+  if(!document.getElementById('chartCompare')) return;
+  // compare: latest peak power per athlete
+  const latestByAthlete = athletes.map(a=>{
+    const arr = (sessionsMap[a.id]||[]).slice().sort((x,y)=>(x.date||'').localeCompare(y.date||''));
+    const last = arr[arr.length-1];
+    return { name:a.name, peak: last? last.peak : null };
+  });
+  destroyChart('compare');
+  charts.compare = new Chart(document.getElementById('chartCompare'), {
+    type:'bar',
+    data:{ labels: latestByAthlete.map(x=>x.name), datasets:[
+      { label:'最新峰值功率 (W)', data: latestByAthlete.map(x=>x.peak), backgroundColor:'#0F1B2D' }
+    ]},
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}} }
+  });
+
+  const normSel = document.getElementById('normAthleteSel');
+  const normAthleteId = normSel ? (normSel.value || (athletes[0] && athletes[0].id)) : null;
+  if(normAthleteId) renderNormChart(normAthleteId);
+}
+
+function switchMgmtView(name){
+  document.querySelectorAll('#mgmtSwitcher .module-btn').forEach(b=>b.classList.toggle('active', b.dataset.mgmt===name));
+  const resSection = document.getElementById('mgmtResistanceSection');
+  const testSection = document.getElementById('mgmtTestSection');
+  if(resSection) resSection.style.display = name==='resistance' ? 'block' : 'none';
+  if(testSection) testSection.style.display = name==='test' ? 'block' : 'none';
+  if(name==='test'){ renderTeamTestHistory(); renderTeamTestAnalysis(); }
+  else{ renderTeamHistory(); renderTeamAnalysis(); }
+}
+
+function allTestsFlat(){
+  const out = [];
+  athletes.forEach(a=>{
+    (testsMap[a.id]||[]).forEach(t=> out.push(Object.assign({athleteName:a.name, athleteId:a.id}, t)));
+  });
+  return out.sort((x,y)=>(y.date||'').localeCompare(x.date||''));
+}
+
+function renderTeamTestHistory(){
+  const athleteFilterEl = document.getElementById('teamTestAthleteFilter');
+  const catFilterEl = document.getElementById('teamTestCategoryFilter');
+  if(!athleteFilterEl || !catFilterEl) return;
+  const athleteFilter = athleteFilterEl.value || 'all';
+  const catFilter = catFilterEl.value || 'all';
+  let rows = allTestsFlat();
+  if(athleteFilter!=='all') rows = rows.filter(r=>r.athleteId===athleteFilter);
+  if(catFilter!=='all') rows = rows.filter(r=>r.category===catFilter);
+
+  const body = document.getElementById('teamTestHistoryBody');
+  const empty = document.getElementById('teamTestHistoryEmpty');
+  if(!body) return;
+  body.innerHTML = '';
+  empty.style.display = rows.length===0 ? 'block' : 'none';
+
+  rows.forEach(r=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${r.date||''}</td>
+      <td>${escapeHtml(r.athleteName)}</td>
+      <td>${categoryBadge(r.category)}</td>
+      <td>${escapeHtml(r.stroke||'—')}</td>
+      <td class="num">${r.distance? r.distance+'m' : '—'}</td>
+      <td class="num">${fmt(r.totalTime)}</td>
+      <td class="num">${fmt(r.strokeRate)}</td>
+      <td class="num">${fmt(r.strokeLength)}</td>
+      <td>${escapeHtml(r.breath||'—')}</td>
+      <td class="num">${fmt(r.vjump)}</td>
+      <td class="num">${fmt(r.ljump)}</td>
+      <td class="num">${(r.gripL!=null||r.gripR!=null) ? (fmt(r.gripL)+' / '+fmt(r.gripR)) : '—'}</td>
+      <td class="num">${fmt(r.flex)}</td>
+    `;
+    body.appendChild(tr);
+  });
+}
+
+function renderTeamTestAnalysis(){
+  const distSel = document.getElementById('teamTestDistanceSel');
+  if(!distSel) return;
+  const allRows = allTestsFlat().filter(r=>r.totalTime!=null && r.distance);
+  const distances = [...new Set(allRows.map(r=>r.distance))];
+  const prevVal = distSel.value;
+  distSel.innerHTML = distances.map(d=>`<option value="${escapeHtml(d)}">${escapeHtml(d)}m</option>`).join('') || '<option value="">尚無計時資料</option>';
+  if(distances.includes(prevVal)) distSel.value = prevVal;
+  const selectedDist = distSel.value;
+
+  const perAthlete = athletes.map(a=>{
+    const rows = (testsMap[a.id]||[]).filter(t=>t.distance===selectedDist && t.totalTime!=null);
+    let best = null;
+    rows.forEach(t=>{ if(best===null || t.totalTime<best) best = t.totalTime; });
+    return { name:a.name, best };
+  }).filter(x=>x.best!=null);
+
+  destroyChart('testCompare');
+  if(document.getElementById('chartTestCompare')){
+    charts.testCompare = new Chart(document.getElementById('chartTestCompare'), {
+      type:'bar',
+      data:{ labels: perAthlete.map(x=>x.name), datasets:[
+        { label: (selectedDist||'—')+'m 最佳時間 (s)', data: perAthlete.map(x=>x.best), backgroundColor:'#0F1B2D' }
+      ]},
+      options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}} }
+    });
+  }
+}
+
+function latestValueFor(athleteId, metric){
+  const arr = (sessionsMap[athleteId]||[]).slice().sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+  const last = arr[arr.length-1];
+  return last ? last[metric] : null;
+}
+
+function renderNormChart(athleteId){
+  const metric = document.getElementById('normMetricSel').value;
+  const groups = { M: [], F: [] };
+  athletes.forEach(a=>{
+    if(a.gender!=='M' && a.gender!=='F') return;
+    const v = latestValueFor(a.id, metric);
+    if(v!==null && v!==undefined && !isNaN(v)) groups[a.gender].push(v);
+  });
+
+  const statsBox = document.getElementById('normStats');
+  destroyChart('norm');
+
+  const allVals = [...groups.M, ...groups.F];
+  if(allVals.length < 2){
+    charts.norm = null;
+    document.getElementById('chartNorm').getContext('2d').clearRect(0,0,9999,9999);
+    statsBox.innerHTML = '每組至少需要 2 位選手的最新數據才能繪製常態分佈曲線，目前資料不足。';
+    return;
+  }
+
+  const mM = mean(groups.M), sdM = stddev(groups.M);
+  const mF = mean(groups.F), sdF = stddev(groups.F);
+  const lo = Math.min(...allVals) - Math.max(sdM||0, sdF||0, 1)*2;
+  const hi = Math.max(...allVals) + Math.max(sdM||0, sdF||0, 1)*2;
+  const steps = 60;
+  const labels = [];
+  const curveM = [], curveF = [];
+  for(let i=0;i<=steps;i++){
+    const x = lo + (hi-lo)*i/steps;
+    labels.push(x.toFixed(1));
+    curveM.push(groups.M.length>=2 ? normalPdf(x, mM, sdM) : null);
+    curveF.push(groups.F.length>=2 ? normalPdf(x, mF, sdF) : null);
+  }
+
+  const selfVal = latestValueFor(athleteId, metric);
+  const selfAthlete = athletes.find(a=>a.id===athleteId);
+  const markerData = labels.map(l=> (selfVal!=null && Math.abs(parseFloat(l)-selfVal) <= (hi-lo)/steps/2) ? Math.max(...curveM.filter(v=>v!==null).concat(curveF.filter(v=>v!==null)), 0.0001) : null);
+
+  charts.norm = new Chart(document.getElementById('chartNorm'), {
+    type:'line',
+    data:{ labels, datasets:[
+      { label:`男性常態分佈 (n=${groups.M.length})`, data: curveM, borderColor:'#1F9E8E', backgroundColor:'rgba(31,158,142,0.08)', fill:true, pointRadius:0, tension:.35, spanGaps:true },
+      { label:`女性常態分佈 (n=${groups.F.length})`, data: curveF, borderColor:'#C0392B', backgroundColor:'rgba(192,57,43,0.08)', fill:true, pointRadius:0, tension:.35, spanGaps:true },
+      { label: selfAthlete? (selfAthlete.name+' 目前數值') : '選手數值', data: markerData, borderColor:'#0F1B2D', backgroundColor:'#0F1B2D', pointRadius:6, pointStyle:'triangle', showLine:false }
+    ]},
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}}, scales:{ y:{ display:false } } }
+  });
+
+  let statsLines = [];
+  if(groups.M.length>=2) statsLines.push(`男性 (n=${groups.M.length})：平均 ${mM.toFixed(1)} ± ${sdM.toFixed(1)}`);
+  else statsLines.push(`男性資料不足（需至少2位選手），現有 n=${groups.M.length}`);
+  if(groups.F.length>=2) statsLines.push(`女性 (n=${groups.F.length})：平均 ${mF.toFixed(1)} ± ${sdF.toFixed(1)}`);
+  else statsLines.push(`女性資料不足（需至少2位選手），現有 n=${groups.F.length}`);
+  if(selfVal!=null && selfAthlete){
+    const g = selfAthlete.gender;
+    const gm = g==='M'? mM:mF, gsd = g==='M'? sdM:sdF, gn = g==='M'? groups.M.length: groups.F.length;
+    if(gn>=2){
+      const pct = normalCdf(selfVal, gm, gsd)*100;
+      statsLines.push(`${escapeHtml(selfAthlete.name)} 目前數值 ${selfVal} 在同性別組中約為第 ${pct.toFixed(0)} 百分位`);
+    }
+  }
+  statsBox.innerHTML = statsLines.join(' ｜ ');
+}
+
+function exportData(){
+  const payload = { athletes, sessionsMap, testsMap, exportedAt: new Date().toISOString() };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'resistance_trainer_data_'+new Date().toISOString().slice(0,10)+'.json';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+async function importData(){
+  const inp = document.getElementById('importFile');
+  if(!inp.files.length){ showToast('請先選擇檔案', true); return; }
+  const file = inp.files[0];
+  const text = await file.text();
+  try{
+    const payload = JSON.parse(text);
+    const incomingAthletes = payload.athletes || [];
+    const incomingSessions = payload.sessionsMap || {};
+    const incomingTests = payload.testsMap || {};
+    let importedCount = 0;
+    for(const oldAthlete of incomingAthletes){
+      const oldId = oldAthlete.id;
+      const { athlete } = await apiFetch('/athletes', {
+        method:'POST',
+        body: JSON.stringify({
+          name: oldAthlete.name, gender: oldAthlete.gender, event: oldAthlete.event,
+          height: oldAthlete.height, weight: oldAthlete.weight, age: oldAthlete.age, note: oldAthlete.note
+        })
+      });
+      athletes.push(athlete);
+      sessionsMap[athlete.id] = [];
+      testsMap[athlete.id] = [];
+      const sessRows = incomingSessions[oldId] || [];
+      for(const s of sessRows){
+        const { session } = await apiFetch(`/athletes/${athlete.id}/sessions`, { method:'POST', body: JSON.stringify(s) });
+        sessionsMap[athlete.id].push(mapSessionFromApi(session));
+      }
+      const testRows = incomingTests[oldId] || [];
+      for(const t of testRows){
+        const { test } = await apiFetch(`/athletes/${athlete.id}/tests`, { method:'POST', body: JSON.stringify(t) });
+        testsMap[athlete.id].push(mapTestFromApi(test));
+      }
+      importedCount++;
+    }
+    renderAthleteList(); renderHistory(); renderAnalysis(); renderAthleteManagement(); renderTestHistory();
+    showToast(`匯入完成，共新增 ${importedCount} 位選手`);
+  }catch(e){ showToast('匯入失敗：'+e.message, true); console.error(e); }
+}
+
+// tabs
+document.querySelectorAll('.tab').forEach(tab=>{
+  tab.addEventListener('click', ()=> goToTab(tab.dataset.tab));
+});
+
+document.getElementById('newAthleteName').addEventListener('keydown', e=>{ if(e.key==='Enter') addAthlete(); });
+
+/* ---------------- AUTH / LOGIN GATING ---------------- */
+
+function showScreen(name){
+  document.getElementById('loginScreen').style.display = name==='login' ? 'flex' : 'none';
+  document.getElementById('coachAppRoot').style.display = name==='coach' ? 'block' : 'none';
+  document.getElementById('adminAppRoot').style.display = name==='admin' ? 'block' : 'none';
+}
+
+async function restoreSession(){
+  if(!authToken){ showScreen('login'); return; }
+  try{
+    const { user } = await apiFetch('/auth/me');
+    currentUser = user;
+    enterApp();
+  }catch(e){
+    localStorage.removeItem('authToken');
+    authToken = null;
+    showScreen('login');
+  }
+}
+
+function enterApp(){
+  if(currentUser.role === 'admin'){
+    document.getElementById('adminWhoami').textContent = currentUser.name + '（管理員）';
+    showScreen('admin');
+    loadAdminData();
+  } else {
+    document.getElementById('coachWhoami').textContent = currentUser.name + '（教練）';
+    showScreen('coach');
+    loadAll();
+  }
+}
+
+document.getElementById('loginBtn').addEventListener('click', doLogin);
+document.getElementById('loginPassword').addEventListener('keydown', e=>{ if(e.key==='Enter') doLogin(); });
+
+async function doLogin(){
+  const email = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  const errEl = document.getElementById('loginError');
+  errEl.textContent = '';
+  try{
+    const { token, user } = await apiFetch('/auth/login', { method:'POST', body: JSON.stringify({ email, password }) });
+    authToken = token;
+    currentUser = user;
+    localStorage.setItem('authToken', token);
+    enterApp();
+  }catch(e){
+    errEl.textContent = e.message;
+  }
+}
+
+function logout(){
+  localStorage.removeItem('authToken');
+  authToken = null;
+  currentUser = null;
+  athletes = []; sessionsMap = {}; testsMap = {}; currentAthleteId = null;
+  document.getElementById('loginEmail').value = '';
+  document.getElementById('loginPassword').value = '';
+  showScreen('login');
+}
+
+/* ---------------- ADMIN VIEW ---------------- */
+
+async function loadAdminData(){
+  try{
+    const [overview, { coaches }] = await Promise.all([
+      apiFetch('/admin/overview'),
+      apiFetch('/admin/coaches')
+    ]);
+    document.getElementById('adminOverviewStrip').innerHTML = `
+      <div class="stat"><div class="v">${overview.coachCount}</div><div class="l">教練數</div></div>
+      <div class="stat"><div class="v">${overview.athleteCount}</div><div class="l">選手數</div></div>
+      <div class="stat"><div class="v">${overview.sessionCount}</div><div class="l">阻力訓練紀錄</div></div>
+      <div class="stat"><div class="v">${overview.testCount}</div><div class="l">檢測紀錄</div></div>
+    `;
+    const body = document.getElementById('coachTableBody');
+    body.innerHTML = coaches.map(c => `
+      <tr>
+        <td>${escapeHtml(c.name)}</td>
+        <td>${escapeHtml(c.email)}</td>
+        <td class="num">${c.athlete_count}</td>
+        <td>${c.active ? '啟用中' : '<span class="badge badge-other">已停用</span>'}</td>
+        <td class="num">${c.created_at}</td>
+        <td class="row-actions">
+          <button class="btn btn-ghost btn-sm" onclick="toggleCoachActive(${c.id}, ${c.active ? 0 : 1})">${c.active ? '停用' : '啟用'}</button>
+          <button class="btn btn-ghost btn-sm" onclick="resetCoachPassword(${c.id})">重設密碼</button>
+          <button class="btn btn-red btn-sm" onclick="deleteCoach(${c.id}, '${escapeHtml(c.name)}')">刪除</button>
+        </td>
+      </tr>
+    `).join('') || '<tr><td colspan="6" class="hint">尚無教練帳號</td></tr>';
+  }catch(e){ showToast(e.message, true); }
+}
+
+async function addCoach(){
+  const name = document.getElementById('newCoachName').value.trim();
+  const email = document.getElementById('newCoachEmail').value.trim();
+  const password = document.getElementById('newCoachPassword').value;
+  const errEl = document.getElementById('addCoachError');
+  errEl.textContent = '';
+  try{
+    await apiFetch('/admin/coaches', { method:'POST', body: JSON.stringify({ name, email, password }) });
+    document.getElementById('newCoachName').value = '';
+    document.getElementById('newCoachEmail').value = '';
+    document.getElementById('newCoachPassword').value = '';
+    showToast('已新增教練：'+name);
+    await loadAdminData();
+  }catch(e){ errEl.textContent = e.message; }
+}
+
+async function toggleCoachActive(id, active){
+  try{
+    await apiFetch(`/admin/coaches/${id}`, { method:'PATCH', body: JSON.stringify({ active: !!active }) });
+    await loadAdminData();
+  }catch(e){ showToast(e.message, true); }
+}
+
+async function resetCoachPassword(id){
+  const password = prompt('請輸入新密碼（至少 6 碼）：');
+  if(!password) return;
+  try{
+    await apiFetch(`/admin/coaches/${id}`, { method:'PATCH', body: JSON.stringify({ password }) });
+    showToast('密碼已重設');
+  }catch(e){ showToast(e.message, true); }
+}
+
+async function deleteCoach(id, name){
+  const ok = await showConfirm(`確定刪除教練「${name}」嗎？此教練名下所有選手與紀錄將一併刪除，無法復原。`);
+  if(!ok) return;
+  try{
+    await apiFetch(`/admin/coaches/${id}`, { method:'DELETE' });
+    showToast('已刪除教練帳號');
+    await loadAdminData();
+  }catch(e){ showToast(e.message, true); }
+}
+
+restoreSession();
+</script>
+</body>
+</html>
