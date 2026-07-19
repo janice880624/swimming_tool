@@ -604,7 +604,9 @@
         </div>
         <div class="charts-grid">
           <div class="card"><h2>泳池成績趨勢 <span class="tag">時間 (s)，越低越好</span></h2><div class="chart-box"><canvas id="chartPoolTime"></canvas></div></div>
+          <div class="card"><h2>游泳力量分析 <span class="tag">M4 · 速度 (m/s)，依距離分組，越高越好</span></h2><div class="chart-box"><canvas id="chartSwimSpeed"></canvas></div></div>
           <div class="card"><h2>划頻 / 划距趨勢</h2><div class="chart-box"><canvas id="chartStroke"></canvas></div></div>
+          <div class="card"><h2>技術效率分析 <span class="tag">M5 · SWOLF 指數，依距離分組，越低越好</span></h2><div class="chart-box"><canvas id="chartSwolf"></canvas></div></div>
           <div class="card"><h2>體能爆發力趨勢 <span class="tag">垂直跳 / 立定跳遠 / 柔軟度</span></h2><div class="chart-box"><canvas id="chartFitness"></canvas></div></div>
           <div class="card"><h2>握力左右比較 <span class="tag">最新一筆</span></h2><div class="chart-box"><canvas id="chartGrip"></canvas></div></div>
         </div>
@@ -1885,8 +1887,12 @@ function renderTestAnalysis(){
     } else {
       const bestTime = (() => { let b=null; sessions.forEach(s=>{ if(s.totalTime==null) return; if(b===null||s.totalTime<b.val) b={val:s.totalTime,date:s.date,dist:s.distance}; }); return b; })();
       const bestOf = (key,mode) => { let b=null; sessions.forEach(s=>{ if(s[key]==null) return; if(b===null||(mode==='max'?s[key]>b.val:s[key]<b.val)) b={val:s[key],date:s.date}; }); return b; };
+      const bestSpeed = (() => { let b=null; sessions.forEach(s=>{ if(!s.totalTime||!s.distance) return; const v=parseFloat(s.distance)/s.totalTime; if(b===null||v>b.val) b={val:+v.toFixed(2),date:s.date,dist:s.distance}; }); return b; })();
+      const bestSwolf = (() => { let b=null; sessions.forEach(s=>{ if(!s.totalTime||!s.distance||!s.strokeLength) return; const v=s.totalTime+(parseFloat(s.distance)/s.strokeLength); if(b===null||v<b.val) b={val:+v.toFixed(1),date:s.date,dist:s.distance}; }); return b; })();
       const items = [
         ['最佳計時 s'+(bestTime&&bestTime.dist?(' ('+bestTime.dist+'m)'):''), bestTime],
+        ['最快速度 m/s'+(bestSpeed&&bestSpeed.dist?(' ('+bestSpeed.dist+'m)'):''), bestSpeed],
+        ['最佳 SWOLF'+(bestSwolf&&bestSwolf.dist?(' ('+bestSwolf.dist+'m)'):''), bestSwolf],
         ['最佳垂直跳 cm', bestOf('vjump','max')],
         ['最佳立定跳遠 cm', bestOf('ljump','max')],
         ['最佳柔軟度 cm', bestOf('flex','max')]
@@ -1951,6 +1957,31 @@ function renderTestAnalysis(){
     });
   }
 
+  // M4 Swimming Power: speed (m/s) = distance / totalTime, grouped by distance so
+  // different pool lengths aren't compared directly against each other.
+  destroyChart('swimSpeed');
+  if(document.getElementById('chartSwimSpeed')){
+    const palette2 = ['#1F9E8E','#C0392B','#F2994A','#5B4FBF','#0F1B2D','#8FA2B8'];
+    const speedSessions = sessions.filter(s=>s.totalTime && s.distance && parseFloat(s.distance)>0);
+    const speedDistances = [...new Set(speedSessions.map(s=>s.distance))];
+    const speedDatasets = speedDistances.map((d,i) => ({
+      label: d+'m 速度',
+      data: labels.map((date,idx) => {
+        const s = sessions[idx];
+        return (s.totalTime && s.distance===d) ? +(parseFloat(s.distance)/s.totalTime).toFixed(2) : null;
+      }),
+      borderColor: palette2[i % palette2.length],
+      backgroundColor: 'transparent',
+      spanGaps: true,
+      tension: .3
+    }));
+    charts.swimSpeed = new Chart(document.getElementById('chartSwimSpeed'), {
+      type:'line',
+      data:{ labels, datasets: speedDatasets },
+      options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}} }
+    });
+  }
+
   destroyChart('stroke');
   if(document.getElementById('chartStroke')){
     charts.stroke = new Chart(document.getElementById('chartStroke'), {
@@ -1959,6 +1990,35 @@ function renderTestAnalysis(){
         { label:'划頻 (次/分)', data: sessions.map(s=>s.strokeRate), borderColor:'#1F9E8E', tension:.3 },
         { label:'划距 (m/次)', data: sessions.map(s=>s.strokeLength), borderColor:'#F2994A', tension:.3 }
       ]},
+      options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}} }
+    });
+  }
+
+  // M5 Technique Efficiency: SWOLF-style index = time (s) + stroke count, where
+  // stroke count = distance / strokeLength. Lower is more efficient. Only
+  // computable when distance, totalTime, and strokeLength are all recorded
+  // together, and grouped by distance since stroke count scales with it.
+  destroyChart('swolf');
+  if(document.getElementById('chartSwolf')){
+    const palette3 = ['#5B4FBF','#1F9E8E','#C0392B','#F2994A','#0F1B2D','#8FA2B8'];
+    const swolfSessions = sessions.filter(s=>s.totalTime && s.distance && s.strokeLength && s.strokeLength>0);
+    const swolfDistances = [...new Set(swolfSessions.map(s=>s.distance))];
+    const swolfDatasets = swolfDistances.map((d,i) => ({
+      label: d+'m SWOLF',
+      data: labels.map((date,idx) => {
+        const s = sessions[idx];
+        if(!(s.totalTime && s.distance===d && s.strokeLength)) return null;
+        const strokeCount = parseFloat(s.distance) / s.strokeLength;
+        return +(s.totalTime + strokeCount).toFixed(1);
+      }),
+      borderColor: palette3[i % palette3.length],
+      backgroundColor: 'transparent',
+      spanGaps: true,
+      tension: .3
+    }));
+    charts.swolf = new Chart(document.getElementById('chartSwolf'), {
+      type:'line',
+      data:{ labels, datasets: swolfDatasets },
       options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}} }
     });
   }

@@ -138,8 +138,8 @@ PostgreSQL 資料庫（透過 node-postgres / pg）
 | M1 Athlete Profile | ✅ 完成 |
 | M2 Baseline Assessment | ✅ 完成（檢測紀錄可標記基準，分析頁自動比較差異） |
 | M3 Resistance Training | ✅ 完成 |
-| M4 Swimming Power | 🟡 部分——沿用泳池計時/速度數據，尚未做獨立的力量分析視角 |
-| M5 Technique Efficiency | 🟡 部分——划頻/划距已記錄，尚未計算綜合效率指標（如 SWOLF） |
+| M4 Swimming Power | ✅ 完成（依距離分組的速度趨勢圖，速度 = 距離/時間） |
+| M5 Technique Efficiency | ✅ 完成（SWOLF 效率指數 = 時間 + 划次，划次由距離/划距推算） |
 | M6 Fatigue Monitor | ✅ 完成 |
 | M7 Performance Dashboard | ✅ 完成（分析圖表 + 教練報表） |
 | M8 Coach Prescription | ✅ 完成 |
