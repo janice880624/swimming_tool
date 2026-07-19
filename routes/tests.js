@@ -18,19 +18,33 @@ router.get('/', ah(async (req, res) => {
 router.post('/', ah(async (req, res) => {
   const b = req.body || {};
   if (!b.date) return res.status(400).json({ error: '日期為必填' });
+  if (b.isBaseline) {
+    // Only one baseline record per athlete — clear any existing one first.
+    await pool.query('UPDATE test_records SET is_baseline = false WHERE athlete_id = $1', [req.athlete.id]);
+  }
   const { rows } = await pool.query(`
     INSERT INTO test_records
       (athlete_id, date, category, stroke, distance, total_time, splits,
-       stroke_rate, stroke_length, breath, vjump, ljump, grip_l, grip_r, flex, note)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+       stroke_rate, stroke_length, breath, vjump, ljump, grip_l, grip_r, flex, is_baseline, note)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
     RETURNING *
   `, [
     req.athlete.id, b.date, b.category ?? null, b.stroke ?? null, b.distance ?? null,
     b.totalTime ?? null, b.splits ?? null, b.strokeRate ?? null, b.strokeLength ?? null,
     b.breath ?? null, b.vjump ?? null, b.ljump ?? null, b.gripL ?? null, b.gripR ?? null,
-    b.flex ?? null, b.note ?? null
+    b.flex ?? null, !!b.isBaseline, b.note ?? null
   ]);
   res.status(201).json({ test: rows[0] });
+}));
+
+// Mark a specific test record as the athlete's baseline (M2). Clears any previous baseline.
+router.patch('/:testId/baseline', ah(async (req, res) => {
+  const testId = Number(req.params.testId);
+  const existing = await pool.query('SELECT id FROM test_records WHERE id = $1 AND athlete_id = $2', [testId, req.athlete.id]);
+  if (!existing.rows.length) return res.status(404).json({ error: '找不到此紀錄' });
+  await pool.query('UPDATE test_records SET is_baseline = false WHERE athlete_id = $1', [req.athlete.id]);
+  const { rows } = await pool.query('UPDATE test_records SET is_baseline = true WHERE id = $1 RETURNING *', [testId]);
+  res.json({ test: rows[0] });
 }));
 
 router.delete('/:testId', ah(async (req, res) => {

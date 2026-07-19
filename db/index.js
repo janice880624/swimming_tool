@@ -61,10 +61,38 @@ async function initSchema() {
       splits TEXT,
       stroke_rate REAL, stroke_length REAL, breath TEXT,
       vjump REAL, ljump REAL, grip_l REAL, grip_r REAL, flex REAL,
+      is_baseline BOOLEAN NOT NULL DEFAULT false,
       note TEXT,
       created_at TIMESTAMP NOT NULL DEFAULT now()
     );
     CREATE INDEX IF NOT EXISTS idx_tests_athlete ON test_records(athlete_id);
+
+    -- M6: Fatigue Monitor — subjective RPE, sleep/recovery self-rating, and enough
+    -- info (rpe * duration = session load) to compute an ACWR-style acute:chronic ratio.
+    CREATE TABLE IF NOT EXISTS fatigue_logs (
+      id SERIAL PRIMARY KEY,
+      athlete_id INTEGER NOT NULL REFERENCES athletes(id) ON DELETE CASCADE,
+      date TEXT NOT NULL,
+      rpe REAL,
+      duration_min REAL,
+      sleep_quality REAL,
+      recovery_feeling REAL,
+      note TEXT,
+      created_at TIMESTAMP NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS idx_fatigue_athlete ON fatigue_logs(athlete_id);
+
+    -- M8: Coach Prescription — free-text prescriptions written by the coach.
+    -- System-generated alerts (e.g. high ACWR) are computed on the fly from
+    -- fatigue_logs, not stored here.
+    CREATE TABLE IF NOT EXISTS prescriptions (
+      id SERIAL PRIMARY KEY,
+      athlete_id INTEGER NOT NULL REFERENCES athletes(id) ON DELETE CASCADE,
+      date TEXT NOT NULL,
+      content TEXT NOT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS idx_prescriptions_athlete ON prescriptions(athlete_id);
   `);
 }
 

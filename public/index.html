@@ -209,6 +209,11 @@
     .sidebar > button{ width:100%; }
     .main{ padding:16px; }
     .form-grid{ grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); }
+    .track-header{ padding-top:54px; }
+    .header-user{
+      position:absolute; top:14px; right:16px; left:16px;
+      justify-content:flex-end;
+    }
   }
 
   @media print{
@@ -245,7 +250,7 @@
   .login-box{ width:360px; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:32px; }
   .login-box h1{ font-family:var(--disp); font-size:20px; text-align:center; margin:0 0 6px; color:var(--navy); }
   .login-box .sub{ text-align:center; font-family:var(--mono); font-size:12px; color:var(--slate); margin-bottom:22px; }
-  .header-user{ position:absolute; top:20px; right:28px; font-family:var(--mono); font-size:12px; color:#9FB0C3; display:flex; align-items:center; gap:12px; }
+  .header-user{ position:absolute; top:20px; right:28px; font-family:var(--mono); font-size:12px; color:#9FB0C3; display:flex; align-items:center; gap:12px; z-index:5; }
   .header-user button{ font-family:var(--body); }
 </style>
 </head>
@@ -269,7 +274,9 @@
     <span id="coachWhoami"></span>
     <button class="btn btn-ghost btn-sm" onclick="logout()">登出</button>
   </div>
-  <h1>訓練監控系統</h1>
+  <div class="eyebrow">Land Fitness · 田徑阻力訓練器</div>
+  <h1>阻力訓練監控系統</h1>
+  <div class="sub">選手數據記錄 · 縱向分析 · 游泳專項應用 &nbsp;|&nbsp; Peak / Avg Power · ACWR-ready</div>
 </div>
 
 <div class="layout">
@@ -301,6 +308,7 @@
     <div class="module-switcher" id="moduleSwitcher">
       <button class="module-btn active" data-module="resistance" onclick="switchModule('resistance')">🏋️ 阻力訓練紀錄</button>
       <button class="module-btn" data-module="test" onclick="switchModule('test')">🏊 游泳檢測紀錄</button>
+      <button class="module-btn" data-module="fatigue" onclick="switchModule('fatigue')">📋 疲勞與處方</button>
     </div>
 
     <div id="resistanceModule">
@@ -542,9 +550,13 @@
           </div>
 
           <div class="field" style="margin-top:12px;"><label>備註</label><textarea id="t_note" rows="2" placeholder="檢測備註"></textarea></div>
+          <div class="field" style="margin-top:10px; flex-direction:row; align-items:center; gap:8px;">
+            <input type="checkbox" id="t_isBaseline" style="width:auto;">
+            <label for="t_isBaseline" style="margin:0; cursor:pointer;">設為此選手的基準測驗 (Baseline)</label>
+          </div>
           <div class="form-actions">
             <button class="btn btn-teal" onclick="saveTestRecord()">儲存這筆檢測</button>
-            <span class="hint">所有欄位皆可留空，依當次檢測項目填寫即可</span>
+            <span class="hint">所有欄位皆可留空，依當次檢測項目填寫即可；設為基準後會自動取消先前的基準標記</span>
           </div>
         </div>
       </div>
@@ -569,7 +581,7 @@
           <div style="overflow-x:auto;">
             <table id="testHistoryTable">
               <thead><tr>
-                <th>日期</th><th>類別</th><th>泳姿</th><th>距離</th><th>總時間</th>
+                <th>日期</th><th>基準</th><th>類別</th><th>泳姿</th><th>距離</th><th>總時間</th>
                 <th>划頻</th><th>划距</th><th>呼吸頻率</th><th>垂直跳</th><th>立定跳遠</th><th>握力L/R</th><th>柔軟度</th><th>操作</th>
               </tr></thead>
               <tbody id="testHistoryBody"></tbody>
@@ -585,11 +597,87 @@
           <h2>檢測歷史最佳紀錄 <span class="tag">Personal Best</span></h2>
           <div class="stat-strip" id="testPBStrip"></div>
         </div>
+
+        <div class="card">
+          <h2>基準值比較 <span class="tag">Baseline Assessment · 最新一筆 vs 基準測驗</span></h2>
+          <div id="baselineCompare"></div>
+        </div>
         <div class="charts-grid">
           <div class="card"><h2>泳池成績趨勢 <span class="tag">時間 (s)，越低越好</span></h2><div class="chart-box"><canvas id="chartPoolTime"></canvas></div></div>
           <div class="card"><h2>划頻 / 划距趨勢</h2><div class="chart-box"><canvas id="chartStroke"></canvas></div></div>
           <div class="card"><h2>體能爆發力趨勢 <span class="tag">垂直跳 / 立定跳遠 / 柔軟度</span></h2><div class="chart-box"><canvas id="chartFitness"></canvas></div></div>
           <div class="card"><h2>握力左右比較 <span class="tag">最新一筆</span></h2><div class="chart-box"><canvas id="chartGrip"></canvas></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="fatigueModule" style="display:none;">
+      <div class="tabs" id="fatigueTabs">
+        <div class="tab active" data-tab="fatigue-entry">疲勞紀錄</div>
+        <div class="tab" data-tab="prescription-entry">訓練處方</div>
+      </div>
+
+      <!-- FATIGUE LOG -->
+      <div class="panel active" id="panel-fatigue-entry">
+        <div class="card">
+          <h2>訓練負荷比值 (ACWR) <span class="tag" id="fatigueCurrentAthleteTag"></span></h2>
+          <div class="stat-strip" id="acwrStrip"></div>
+          <div class="hint" id="acwrHint" style="margin-top:8px;"></div>
+        </div>
+
+        <div class="card">
+          <h2>新增疲勞紀錄</h2>
+          <div class="form-grid">
+            <div class="field"><label>日期</label><input type="date" id="fl_date"></div>
+            <div class="field"><label>主觀疲勞感受 RPE (1-10)</label><input type="number" min="1" max="10" step="1" id="fl_rpe"></div>
+            <div class="field"><label>當日訓練時長 (分鐘)</label><input type="number" step="any" id="fl_duration"></div>
+            <div class="field"><label>睡眠品質 (1-5)</label><input type="number" min="1" max="5" step="1" id="fl_sleep"></div>
+            <div class="field"><label>恢復感受 (1-5)</label><input type="number" min="1" max="5" step="1" id="fl_recovery"></div>
+          </div>
+          <div class="field" style="margin-top:12px;"><label>備註</label><textarea id="fl_note" rows="2" placeholder="今日狀況備註"></textarea></div>
+          <div class="form-actions">
+            <button class="btn btn-teal" onclick="saveFatigueLog()">儲存這筆紀錄</button>
+            <span class="hint">訓練負荷 = RPE × 訓練時長，用來計算急性/慢性負荷比值 (ACWR)</span>
+          </div>
+        </div>
+
+        <div class="charts-grid">
+          <div class="card"><h2>RPE 與訓練負荷趨勢</h2><div class="chart-box"><canvas id="chartFatigueLoad"></canvas></div></div>
+          <div class="card"><h2>睡眠 / 恢復趨勢</h2><div class="chart-box"><canvas id="chartRecovery"></canvas></div></div>
+        </div>
+
+        <div class="card">
+          <h2>疲勞紀錄歷史</h2>
+          <div style="overflow-x:auto;">
+            <table id="fatigueHistoryTable">
+              <thead><tr><th>日期</th><th>RPE</th><th>訓練時長</th><th>當日負荷</th><th>睡眠品質</th><th>恢復感受</th><th>備註</th><th>操作</th></tr></thead>
+              <tbody id="fatigueHistoryBody"></tbody>
+            </table>
+          </div>
+          <div class="empty" id="fatigueHistoryEmpty" style="display:none;">尚無疲勞紀錄</div>
+        </div>
+      </div>
+
+      <!-- PRESCRIPTION -->
+      <div class="panel" id="panel-prescription-entry">
+        <div class="card">
+          <h2>系統提醒 <span class="tag">依訓練負荷數據自動判斷</span></h2>
+          <div id="prescriptionAlerts"></div>
+        </div>
+
+        <div class="card">
+          <h2>新增訓練處方</h2>
+          <div class="form-grid">
+            <div class="field"><label>日期</label><input type="date" id="rx_date"></div>
+          </div>
+          <div class="field" style="margin-top:12px;"><label>處方內容</label><textarea id="rx_content" rows="4" placeholder="例：本週降低阻力訓練強度，增加技術訓練比例，觀察恢復狀況"></textarea></div>
+          <div class="form-actions"><button class="btn btn-teal" onclick="savePrescription()">儲存處方</button></div>
+        </div>
+
+        <div class="card">
+          <h2>處方歷史</h2>
+          <div id="prescriptionHistory"></div>
+          <div class="empty" id="prescriptionHistoryEmpty" style="display:none;">尚無訓練處方</div>
         </div>
       </div>
     </div>
@@ -817,6 +905,11 @@
       <div class="stat-strip" id="adminOverviewStrip"></div>
     </div>
 
+    <div class="card">
+      <h2>重點摘要</h2>
+      <div id="adminSummary"></div>
+    </div>
+
     <div class="charts-grid">
       <div class="card"><h2>各教練選手數量比較</h2><div class="chart-box"><canvas id="chartCoachAthletes"></canvas></div></div>
       <div class="card"><h2>各教練訓練/檢測紀錄數比較</h2><div class="chart-box"><canvas id="chartCoachRecords"></canvas></div></div>
@@ -849,8 +942,10 @@
 let athletes = [];
 let sessionsMap = {}; // athleteId -> array (resistance training records)
 let testsMap = {}; // athleteId -> array (swim coach test records)
+let fatigueMap = {}; // athleteId -> array (M6 fatigue logs)
+let prescriptionsMap = {}; // athleteId -> array (M8 coach prescriptions)
 let currentAthleteId = null;
-let currentModule = 'resistance'; // 'resistance' | 'test'
+let currentModule = 'resistance'; // 'resistance' | 'test' | 'fatigue'
 let charts = {};
 
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
@@ -879,7 +974,14 @@ function mapTestFromApi(row){
   return { id:row.id, date:row.date, category:row.category, stroke:row.stroke, distance:row.distance,
     totalTime:row.total_time, splits:row.splits, strokeRate:row.stroke_rate, strokeLength:row.stroke_length,
     breath:row.breath, vjump:row.vjump, ljump:row.ljump, gripL:row.grip_l, gripR:row.grip_r,
-    flex:row.flex, note:row.note };
+    flex:row.flex, isBaseline:row.is_baseline, note:row.note };
+}
+function mapFatigueFromApi(row){
+  return { id:row.id, date:row.date, rpe:row.rpe, durationMin:row.duration_min,
+    sleepQuality:row.sleep_quality, recoveryFeeling:row.recovery_feeling, note:row.note };
+}
+function mapPrescriptionFromApi(row){
+  return { id:row.id, date:row.date, content:row.content };
 }
 
 function showToast(msg, isError){
@@ -917,12 +1019,14 @@ function updateMainView(){
   const switcher = document.getElementById('moduleSwitcher');
   const resistanceModule = document.getElementById('resistanceModule');
   const testModule = document.getElementById('testModule');
+  const fatigueModule = document.getElementById('fatigueModule');
   const managementActive = document.getElementById('panel-athletes').classList.contains('active');
   if(managementActive){
     prompt.style.display = 'none';
     switcher.style.display = 'none';
     resistanceModule.style.display = 'none';
     testModule.style.display = 'none';
+    fatigueModule.style.display = 'none';
     return;
   }
   if(currentAthleteId){
@@ -930,11 +1034,13 @@ function updateMainView(){
     switcher.style.display = 'flex';
     resistanceModule.style.display = currentModule==='resistance' ? 'block' : 'none';
     testModule.style.display = currentModule==='test' ? 'block' : 'none';
+    fatigueModule.style.display = currentModule==='fatigue' ? 'block' : 'none';
   } else {
     prompt.style.display = 'block';
     switcher.style.display = 'none';
     resistanceModule.style.display = 'none';
     testModule.style.display = 'none';
+    fatigueModule.style.display = 'none';
     document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
   }
 }
@@ -942,7 +1048,8 @@ function updateMainView(){
 function switchModule(name){
   currentModule = name;
   document.querySelectorAll('#moduleSwitcher .module-btn').forEach(b=>b.classList.toggle('active', b.dataset.module===name));
-  goToTab(name==='test' ? lastTestTab : lastMainTab);
+  const defaultTab = name==='test' ? lastTestTab : name==='fatigue' ? lastFatigueTab : lastMainTab;
+  goToTab(defaultTab);
 }
 
 async function loadAll(){
@@ -952,6 +1059,8 @@ async function loadAll(){
   }catch(e){ athletes = []; showToast('載入選手清單失敗：'+e.message, true); }
   sessionsMap = {};
   testsMap = {};
+  fatigueMap = {};
+  prescriptionsMap = {};
   await Promise.all(athletes.map(async a=>{
     try{
       const { sessions } = await apiFetch(`/athletes/${a.id}/sessions`);
@@ -961,6 +1070,14 @@ async function loadAll(){
       const { tests } = await apiFetch(`/athletes/${a.id}/tests`);
       testsMap[a.id] = tests.map(mapTestFromApi);
     }catch(e){ testsMap[a.id] = []; }
+    try{
+      const { logs } = await apiFetch(`/athletes/${a.id}/fatigue`);
+      fatigueMap[a.id] = logs.map(mapFatigueFromApi);
+    }catch(e){ fatigueMap[a.id] = []; }
+    try{
+      const { prescriptions } = await apiFetch(`/athletes/${a.id}/prescriptions`);
+      prescriptionsMap[a.id] = prescriptions.map(mapPrescriptionFromApi);
+    }catch(e){ prescriptionsMap[a.id] = []; }
   }));
   if(athletes.length && !currentAthleteId) currentAthleteId = athletes[0].id;
   renderAthleteList();
@@ -970,6 +1087,9 @@ async function loadAll(){
   renderAthleteManagement();
   renderTestEntryPanel();
   renderTestHistory();
+  renderFatigueEntryPanel();
+  renderFatigueHistory();
+  renderPrescriptionPanel();
   updateMainView();
 }
 
@@ -982,6 +1102,8 @@ async function addAthlete(){
     athletes.push(athlete);
     sessionsMap[athlete.id] = [];
     testsMap[athlete.id] = [];
+    fatigueMap[athlete.id] = [];
+    prescriptionsMap[athlete.id] = [];
     currentAthleteId = athlete.id;
     document.getElementById('newAthleteName').value='';
     renderAthleteList(); renderEntryPanel(); renderHistory(); renderAnalysis(); renderAthleteManagement();
@@ -1000,6 +1122,8 @@ async function deleteAthlete(id, evt){
     athletes = athletes.filter(a=>a.id!==id);
     delete sessionsMap[id];
     delete testsMap[id];
+    delete fatigueMap[id];
+    delete prescriptionsMap[id];
     if(currentAthleteId===id) currentAthleteId = athletes.length? athletes[0].id : null;
     renderAthleteList(); renderEntryPanel(); renderHistory(); renderAnalysis(); renderAthleteManagement();
     updateMainView();
@@ -1010,11 +1134,15 @@ async function deleteAthlete(id, evt){
 function selectAthlete(id){
   currentAthleteId = id;
   renderAthleteList(); renderEntryPanel(); renderHistory();
-  goToTab(currentModule==='test' ? (lastTestTab || 'test-entry') : (lastMainTab || 'entry'));
+  const defaultTab = currentModule==='test' ? (lastTestTab || 'test-entry')
+    : currentModule==='fatigue' ? (lastFatigueTab || 'fatigue-entry')
+    : (lastMainTab || 'entry');
+  goToTab(defaultTab);
 }
 
 let lastMainTab = 'entry';
 let lastTestTab = 'test-entry';
+let lastFatigueTab = 'fatigue-entry';
 
 function goToTab(name){
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
@@ -1023,6 +1151,7 @@ function goToTab(name){
   if(pill) pill.classList.add('active');
   document.getElementById('panel-'+name).classList.add('active');
   if(name.startsWith('test-')) lastTestTab = name;
+  else if(name==='fatigue-entry' || name==='prescription-entry') lastFatigueTab = name;
   else if(name!=='athletes') lastMainTab = name;
   if(name==='athletes'){ renderAthleteManagement(); renderTeamHistory(); renderTeamAnalysis(); renderTeamTestHistory(); renderTeamTestAnalysis(); }
   if(name==='analysis') renderAnalysis();
@@ -1030,6 +1159,8 @@ function goToTab(name){
   if(name==='test-entry') renderTestEntryPanel();
   if(name==='test-history') renderTestHistory();
   if(name==='test-analysis') renderTestAnalysis();
+  if(name==='fatigue-entry'){ renderFatigueEntryPanel(); renderFatigueHistory(); }
+  if(name==='prescription-entry') renderPrescriptionPanel();
   updateMainView();
 }
 
@@ -1078,6 +1209,8 @@ async function addAthleteFull(){
     athletes.push(athlete);
     sessionsMap[athlete.id] = [];
     testsMap[athlete.id] = [];
+    fatigueMap[athlete.id] = [];
+    prescriptionsMap[athlete.id] = [];
     currentAthleteId = athlete.id;
     document.getElementById('am_name').value='';
     document.getElementById('am_height').value='';
@@ -1654,16 +1787,31 @@ async function saveTestRecord(){
     gripL: val('t_gripL'),
     gripR: val('t_gripR'),
     flex: val('t_flex'),
+    isBaseline: document.getElementById('t_isBaseline').checked,
     note: txt('t_note')
   };
   try{
     const { test } = await apiFetch(`/athletes/${currentAthleteId}/tests`, { method:'POST', body: JSON.stringify(body) });
     testsMap[currentAthleteId] = testsMap[currentAthleteId] || [];
+    if(body.isBaseline){
+      testsMap[currentAthleteId].forEach(t => t.isBaseline = false);
+    }
     testsMap[currentAthleteId].push(mapTestFromApi(test));
     testsMap[currentAthleteId].sort((x,y)=>(x.date||'').localeCompare(y.date||''));
     ['t_totaltime','t_splits','t_strokerate','t_strokelength','t_breath','t_vjump','t_ljump','t_gripL','t_gripR','t_flex','t_note'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('t_isBaseline').checked = false;
     renderTestHistory();
     showToast('已儲存檢測紀錄');
+  }catch(e){ showToast(e.message, true); }
+}
+
+async function setTestBaseline(athleteId, testId){
+  athleteId = Number(athleteId); testId = Number(testId);
+  try{
+    await apiFetch(`/athletes/${athleteId}/tests/${testId}/baseline`, { method:'PATCH' });
+    (testsMap[athleteId]||[]).forEach(t => t.isBaseline = (t.id===testId));
+    renderTestHistory();
+    showToast('已設為基準測驗');
   }catch(e){ showToast(e.message, true); }
 }
 
@@ -1706,6 +1854,7 @@ function renderTestHistory(){
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>${r.date||''}</td>
+      <td>${r.isBaseline ? '<span class="badge badge-full">基準</span>' : `<button class="btn btn-ghost btn-sm" onclick="setTestBaseline('${currentAthleteId}','${r.id}')">設為基準</button>`}</td>
       <td>${categoryBadge(r.category)}</td>
       <td>${escapeHtml(r.stroke||'—')}</td>
       <td class="num">${r.distance? r.distance+'m' : '—'}</td>
@@ -1743,6 +1892,42 @@ function renderTestAnalysis(){
         ['最佳柔軟度 cm', bestOf('flex','max')]
       ];
       pbStrip.innerHTML = items.map(([label,best])=>`<div class="stat"><div class="v">${best?best.val:'—'}</div><div class="l">${label}${best?' · '+best.date:''}</div></div>`).join('');
+    }
+  }
+
+  // baseline comparison
+  const baselineEl = document.getElementById('baselineCompare');
+  if(baselineEl){
+    const baseline = sessions.find(s=>s.isBaseline);
+    const latest = sessions[sessions.length-1];
+    if(!baseline){
+      baselineEl.innerHTML = '<div class="hint">尚未設定基準測驗，請至「新增檢測」頁面把某一筆紀錄設為基準，之後每次檢測都能跟這筆比較。</div>';
+    } else if(!latest || latest.id===baseline.id){
+      baselineEl.innerHTML = `<div class="hint">基準測驗：${baseline.date}。目前還沒有更新的檢測紀錄可以比較。</div>`;
+    } else {
+      const metrics = [
+        ['totalTime','總時間 (s)', true],
+        ['strokeRate','划頻 (次/分)', false],
+        ['strokeLength','划距 (m/次)', false],
+        ['vjump','垂直跳 (cm)', false],
+        ['ljump','立定跳遠 (cm)', false],
+        ['flex','柔軟度 (cm)', false]
+      ];
+      const rows = metrics.map(([key,label,lowerIsBetter])=>{
+        const b = baseline[key], l = latest[key];
+        if(b==null || l==null) return null;
+        const diff = l - b;
+        const pct = b!==0 ? (diff/Math.abs(b)*100) : 0;
+        const improved = lowerIsBetter ? diff < 0 : diff > 0;
+        const arrow = diff===0 ? '—' : (improved ? '▲ 進步' : '▼ 退步');
+        const color = diff===0 ? 'var(--slate)' : (improved ? 'var(--teal)' : 'var(--track-red)');
+        return `<div style="display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid var(--line); font-size:13px;">
+          <span>${label}</span>
+          <span>基準 ${b} → 最新 ${l}　<span style="color:${color}; font-weight:700;">${arrow} ${Math.abs(pct).toFixed(1)}%</span></span>
+        </div>`;
+      }).filter(Boolean);
+      baselineEl.innerHTML = `<div class="hint" style="margin-bottom:8px;">基準測驗：${baseline.date}　最新檢測：${latest.date}</div>` +
+        (rows.length ? rows.join('') : '<div class="hint">基準與最新紀錄沒有可比較的共同欄位</div>');
     }
   }
 
@@ -1804,6 +1989,209 @@ function renderTestAnalysis(){
       options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}} }
     });
   }
+}
+
+/* ===== M6 FATIGUE MONITOR + M8 COACH PRESCRIPTION ===== */
+
+function computeACWR(logs){
+  const now = new Date();
+  const dayMs = 24*60*60*1000;
+  const withLoad = (logs||[]).filter(l => l.rpe!=null && l.durationMin!=null).map(l => ({
+    load: l.rpe * l.durationMin,
+    daysAgo: Math.floor((now - new Date(l.date)) / dayMs)
+  }));
+  const acuteLogs = withLoad.filter(l => l.daysAgo >= 0 && l.daysAgo < 7);
+  const chronicLogs = withLoad.filter(l => l.daysAgo >= 0 && l.daysAgo < 28);
+  const acuteAvg = acuteLogs.reduce((a,b)=>a+b.load,0) / 7;
+  const chronicAvg = chronicLogs.reduce((a,b)=>a+b.load,0) / 28;
+  const ratio = chronicAvg > 0 ? acuteAvg / chronicAvg : null;
+  return { acuteAvg, chronicAvg, ratio, hasData: withLoad.length > 0 };
+}
+
+function renderFatigueEntryPanel(){
+  const tagEl = document.getElementById('fatigueCurrentAthleteTag');
+  const a = athletes.find(x=>x.id===currentAthleteId);
+  if(tagEl) tagEl.textContent = a ? ('目前選手：'+a.name) : '';
+  const dateEl = document.getElementById('fl_date');
+  if(dateEl && !dateEl.value) dateEl.value = new Date().toISOString().slice(0,10);
+
+  const strip = document.getElementById('acwrStrip');
+  const hintEl = document.getElementById('acwrHint');
+  if(!strip) return;
+  const logs = currentAthleteId ? (fatigueMap[currentAthleteId]||[]) : [];
+  const { acuteAvg, chronicAvg, ratio, hasData } = computeACWR(logs);
+  if(!hasData){
+    strip.innerHTML = '<div class="hint">尚無足夠的 RPE + 訓練時長資料，無法計算負荷比值</div>';
+    if(hintEl) hintEl.innerHTML = '';
+    return;
+  }
+  strip.innerHTML = `
+    <div class="stat"><div class="v">${acuteAvg.toFixed(0)}</div><div class="l">急性負荷（近7日平均）</div></div>
+    <div class="stat"><div class="v">${chronicAvg.toFixed(0)}</div><div class="l">慢性負荷（近28日平均）</div></div>
+    <div class="stat"><div class="v">${ratio!=null ? ratio.toFixed(2) : '—'}</div><div class="l">ACWR 比值</div></div>
+  `;
+  if(hintEl){
+    if(ratio==null) hintEl.innerHTML = '';
+    else if(ratio > 1.5) hintEl.innerHTML = '<span style="color:var(--track-red); font-weight:700;">⚠ 負荷比值偏高，受傷風險增加，建議降低訓練量或增加恢復</span>';
+    else if(ratio < 0.8) hintEl.innerHTML = '<span style="color:#F2994A; font-weight:700;">訓練負荷偏低，可能刺激不足</span>';
+    else hintEl.innerHTML = '<span style="color:var(--teal); font-weight:700;">✓ 負荷比值在建議範圍內（0.8–1.3）</span>';
+  }
+}
+
+async function saveFatigueLog(){
+  if(!currentAthleteId){ showToast('請先選擇選手', true); return; }
+  const val = id => { const v = document.getElementById(id).value; return v===''? null : parseFloat(v); };
+  const body = {
+    date: document.getElementById('fl_date').value || new Date().toISOString().slice(0,10),
+    rpe: val('fl_rpe'),
+    durationMin: val('fl_duration'),
+    sleepQuality: val('fl_sleep'),
+    recoveryFeeling: val('fl_recovery'),
+    note: document.getElementById('fl_note').value
+  };
+  try{
+    const { log } = await apiFetch(`/athletes/${currentAthleteId}/fatigue`, { method:'POST', body: JSON.stringify(body) });
+    fatigueMap[currentAthleteId] = fatigueMap[currentAthleteId] || [];
+    fatigueMap[currentAthleteId].push(mapFatigueFromApi(log));
+    fatigueMap[currentAthleteId].sort((x,y)=>(x.date||'').localeCompare(y.date||''));
+    ['fl_rpe','fl_duration','fl_sleep','fl_recovery','fl_note'].forEach(id=>document.getElementById(id).value='');
+    renderFatigueEntryPanel();
+    renderFatigueHistory();
+    showToast('已儲存疲勞紀錄');
+  }catch(e){ showToast(e.message, true); }
+}
+
+async function deleteFatigueLog(athleteId, logId){
+  athleteId = Number(athleteId); logId = Number(logId);
+  const confirmed = await showConfirm('確定刪除這筆疲勞紀錄？');
+  if(!confirmed) return;
+  try{
+    await apiFetch(`/athletes/${athleteId}/fatigue/${logId}`, { method:'DELETE' });
+    fatigueMap[athleteId] = (fatigueMap[athleteId]||[]).filter(l=>l.id!==logId);
+    renderFatigueEntryPanel();
+    renderFatigueHistory();
+    showToast('已刪除該筆紀錄');
+  }catch(e){ showToast(e.message, true); }
+}
+
+function renderFatigueHistory(){
+  const logs = currentAthleteId ? (fatigueMap[currentAthleteId]||[]) : [];
+  const sorted = logs.slice().sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+  const labels = sorted.map(l=>l.date);
+
+  destroyChart('fatigueLoad');
+  if(document.getElementById('chartFatigueLoad')){
+    charts.fatigueLoad = new Chart(document.getElementById('chartFatigueLoad'), {
+      data:{ labels, datasets:[
+        { type:'bar', label:'訓練負荷 (RPE×時長)', data: sorted.map(l=> (l.rpe!=null && l.durationMin!=null) ? l.rpe*l.durationMin : null), backgroundColor:'#1F9E8E', yAxisID:'y' },
+        { type:'line', label:'RPE', data: sorted.map(l=>l.rpe), borderColor:'#C0392B', yAxisID:'y1', tension:.3 }
+      ]},
+      options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}},
+        scales:{ y:{ position:'left' }, y1:{ position:'right', min:0, max:10, grid:{drawOnChartArea:false} } }
+      }
+    });
+  }
+
+  destroyChart('recovery');
+  if(document.getElementById('chartRecovery')){
+    charts.recovery = new Chart(document.getElementById('chartRecovery'), {
+      type:'line',
+      data:{ labels, datasets:[
+        { label:'睡眠品質 (1-5)', data: sorted.map(l=>l.sleepQuality), borderColor:'#1F9E8E', tension:.3 },
+        { label:'恢復感受 (1-5)', data: sorted.map(l=>l.recoveryFeeling), borderColor:'#F2994A', tension:.3 }
+      ]},
+      options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}}, scales:{ y:{ min:0, max:5 } } }
+    });
+  }
+
+  const body = document.getElementById('fatigueHistoryBody');
+  const empty = document.getElementById('fatigueHistoryEmpty');
+  if(!body) return;
+  const rows = logs.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  body.innerHTML = '';
+  empty.style.display = (!currentAthleteId || rows.length===0) ? 'block' : 'none';
+  empty.textContent = !currentAthleteId ? '請先於左側選擇一位選手' : '尚無疲勞紀錄';
+  rows.forEach(l=>{
+    const load = (l.rpe!=null && l.durationMin!=null) ? (l.rpe*l.durationMin).toFixed(0) : '—';
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${l.date||''}</td>
+      <td class="num">${fmt(l.rpe)}</td>
+      <td class="num">${fmt(l.durationMin)}</td>
+      <td class="num">${load}</td>
+      <td class="num">${fmt(l.sleepQuality)}</td>
+      <td class="num">${fmt(l.recoveryFeeling)}</td>
+      <td>${escapeHtml(l.note||'—')}</td>
+      <td class="row-actions"><button class="btn btn-ghost btn-sm" onclick="deleteFatigueLog('${currentAthleteId}','${l.id}')">刪除</button></td>
+    `;
+    body.appendChild(tr);
+  });
+}
+
+function renderPrescriptionPanel(){
+  const dateEl = document.getElementById('rx_date');
+  if(dateEl && !dateEl.value) dateEl.value = new Date().toISOString().slice(0,10);
+
+  const alertsEl = document.getElementById('prescriptionAlerts');
+  if(alertsEl){
+    const logs = currentAthleteId ? (fatigueMap[currentAthleteId]||[]) : [];
+    const { ratio, hasData } = computeACWR(logs);
+    const alerts = [];
+    if(hasData && ratio!=null){
+      if(ratio > 1.5) alerts.push('訓練負荷比值 (ACWR) 為 '+ratio.toFixed(2)+'，偏高，受傷風險增加，建議調整訓練量');
+      else if(ratio < 0.8) alerts.push('訓練負荷比值 (ACWR) 為 '+ratio.toFixed(2)+'，偏低，訓練刺激可能不足');
+    }
+    const recent = logs.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')).slice(0,3);
+    const lowRecovery = recent.filter(l=>l.recoveryFeeling!=null && l.recoveryFeeling<=2);
+    if(lowRecovery.length>=2) alerts.push('近期恢復感受偏低，建議留意選手疲勞狀況');
+
+    alertsEl.innerHTML = alerts.length
+      ? alerts.map(t=>`<div style="padding:8px 0; border-bottom:1px solid var(--line); color:var(--track-red); font-weight:600;">⚠ ${t}</div>`).join('')
+      : '<div class="hint">目前沒有需要特別留意的提醒</div>';
+  }
+
+  const histEl = document.getElementById('prescriptionHistory');
+  const emptyEl = document.getElementById('prescriptionHistoryEmpty');
+  if(!histEl) return;
+  const list = currentAthleteId ? (prescriptionsMap[currentAthleteId]||[]).slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')) : [];
+  emptyEl.style.display = (!currentAthleteId || list.length===0) ? 'block' : 'none';
+  emptyEl.textContent = !currentAthleteId ? '請先於左側選擇一位選手' : '尚無訓練處方';
+  histEl.innerHTML = list.map(p => `
+    <div style="padding:12px; margin-bottom:10px; border:1px solid var(--line); border-radius:8px;">
+      <div style="display:flex; justify-content:space-between; align-items:start;">
+        <b>${p.date}</b>
+        <button class="btn btn-ghost btn-sm" onclick="deletePrescription('${currentAthleteId}','${p.id}')">刪除</button>
+      </div>
+      <div style="white-space:pre-wrap; margin-top:6px; font-size:14px;">${escapeHtml(p.content)}</div>
+    </div>
+  `).join('');
+}
+
+async function savePrescription(){
+  if(!currentAthleteId){ showToast('請先選擇選手', true); return; }
+  const date = document.getElementById('rx_date').value || new Date().toISOString().slice(0,10);
+  const content = document.getElementById('rx_content').value.trim();
+  if(!content){ showToast('請輸入處方內容', true); return; }
+  try{
+    const { prescription } = await apiFetch(`/athletes/${currentAthleteId}/prescriptions`, { method:'POST', body: JSON.stringify({ date, content }) });
+    prescriptionsMap[currentAthleteId] = prescriptionsMap[currentAthleteId] || [];
+    prescriptionsMap[currentAthleteId].push(mapPrescriptionFromApi(prescription));
+    document.getElementById('rx_content').value = '';
+    renderPrescriptionPanel();
+    showToast('已儲存訓練處方');
+  }catch(e){ showToast(e.message, true); }
+}
+
+async function deletePrescription(athleteId, id){
+  athleteId = Number(athleteId); id = Number(id);
+  const confirmed = await showConfirm('確定刪除這筆訓練處方？');
+  if(!confirmed) return;
+  try{
+    await apiFetch(`/athletes/${athleteId}/prescriptions/${id}`, { method:'DELETE' });
+    prescriptionsMap[athleteId] = (prescriptionsMap[athleteId]||[]).filter(p=>p.id!==id);
+    renderPrescriptionPanel();
+    showToast('已刪除訓練處方');
+  }catch(e){ showToast(e.message, true); }
 }
 
 function renderTeamAnalysis(){
@@ -2093,12 +2481,10 @@ async function doLogin(){
 
 function logout(){
   localStorage.removeItem('authToken');
-  authToken = null;
-  currentUser = null;
-  athletes = []; sessionsMap = {}; testsMap = {}; currentAthleteId = null;
-  document.getElementById('loginEmail').value = '';
-  document.getElementById('loginPassword').value = '';
-  showScreen('login');
+  // Force a full reload rather than just resetting in-memory state: this guarantees
+  // a clean slate even if some in-flight request or leftover chart/interval from
+  // before the click would otherwise re-populate the screen.
+  window.location.href = window.location.pathname;
 }
 
 /* ---------------- ADMIN VIEW ---------------- */
@@ -2133,6 +2519,7 @@ async function loadAdminData(){
       </tr>
     `).join('') || '<tr><td colspan="8" class="hint">尚無教練帳號</td></tr>';
     renderCoachCharts(coaches);
+    renderAdminSummary(coaches, overview);
   }catch(e){ showToast(e.message, true); }
 }
 
@@ -2175,6 +2562,39 @@ function renderCoachCharts(coaches){
       });
     }
   }
+}
+
+function renderAdminSummary(coaches, overview){
+  const el = document.getElementById('adminSummary');
+  if(!el) return;
+  if(!coaches.length){
+    el.innerHTML = '<div class="hint">目前尚無教練帳號，新增第一位教練後這裡會顯示重點摘要。</div>';
+    return;
+  }
+
+  const avgAthletes = coaches.length ? (overview.athleteCount / coaches.length).toFixed(1) : '0';
+  const mostActive = coaches.slice().sort((a,b)=> (b.session_count+b.test_count) - (a.session_count+a.test_count))[0];
+  const noAthletes = coaches.filter(c=>c.athlete_count===0);
+  const inactiveCount = coaches.filter(c=>!c.active).length;
+
+  const now = new Date();
+  const thisMonthKey = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+  const newThisMonth = coaches.filter(c => (c.created_at||'').slice(0,7) === thisMonthKey).length;
+
+  const lines = [];
+  lines.push(`平均每位教練管理 <b>${avgAthletes}</b> 位選手`);
+  if(mostActive && (mostActive.session_count + mostActive.test_count) > 0){
+    lines.push(`目前最活躍教練：<b>${escapeHtml(mostActive.name)}</b>（共 ${mostActive.session_count + mostActive.test_count} 筆訓練/檢測紀錄）`);
+  }
+  lines.push(`本月新增教練：<b>${newThisMonth}</b> 位`);
+  if(noAthletes.length){
+    lines.push(`尚未新增任何選手的教練：<b>${noAthletes.map(c=>escapeHtml(c.name)).join('、')}</b>，可能需要主動關心`);
+  }
+  if(inactiveCount){
+    lines.push(`已停用帳號：<b>${inactiveCount}</b> 位`);
+  }
+
+  el.innerHTML = lines.map(l => `<div style="padding:8px 0; border-bottom:1px solid var(--line); font-size:14px;">${l}</div>`).join('');
 }
 
 async function addCoach(){

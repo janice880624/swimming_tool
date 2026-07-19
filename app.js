@@ -7,6 +7,8 @@ const adminRoutes = require('./routes/admin');
 const { router: athleteRoutes } = require('./routes/athletes');
 const sessionRoutes = require('./routes/sessions');
 const testRoutes = require('./routes/tests');
+const fatigueRoutes = require('./routes/fatigue');
+const prescriptionRoutes = require('./routes/prescriptions');
 
 // This module only defines the API (routes + middleware). It does NOT call
 // app.listen() and does NOT serve static files — that's handled differently
@@ -24,6 +26,8 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/athletes', athleteRoutes);
 app.use('/api/athletes/:athleteId/sessions', sessionRoutes);
 app.use('/api/athletes/:athleteId/tests', testRoutes);
+app.use('/api/athletes/:athleteId/fatigue', fatigueRoutes);
+app.use('/api/athletes/:athleteId/prescriptions', prescriptionRoutes);
 
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 
